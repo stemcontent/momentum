@@ -1,0 +1,1000 @@
+{% comment %}
+  ------------------------------------------------------------------
+  About Story
+  ------------------------------------------------------------------
+  Standalone Online Store 2.0 section. A large serif brand statement
+  with an image embedded inline in the text flow, a scroll-linked
+  word-by-word reveal, an outlined marquee button, and a row of
+  descriptor words (blocks).
+
+  Design reference: the about section on apinistudio.com.
+
+  Blocks in this file:
+    TEXT FLOW     — the statement, richtext split into before/after
+    INLINE IMAGE  — image as an inline-block "word" in the sentence
+    SCROLL REVEAL — scroll-linked color sweep across the words
+    BUTTON MARQUEE— outlined pill, looping label on hover/focus
+    DESCRIPTORS   — staggered fade/rise words (section blocks)
+    RESPONSIVE    — 990px / 750px breakpoints
+
+  No external libraries. All CSS is scoped to this section's id and
+  all settings are output as CSS custom properties on the root, so
+  multiple instances carry independent settings. JS re-initializes
+  on shopify:section:load and is guarded against double-splitting.
+
+  Progressive enhancement: the "as-js" class is added by script; if
+  JS never runs the statement renders fully in its final color.
+  Everything is disabled under prefers-reduced-motion: reduce.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  comment
+    Richtext outputs <p> wrappers. The statement must read as one
+    continuous paragraph, so paragraph breaks collapse to spaces and
+    the wrappers are removed. Links get tabindex="-1" because the
+    visual copy is aria-hidden (a visually-hidden plain-text copy
+    carries the accessible name).
+  endcomment
+  assign before_html = s.text_before | replace: '</p><p>', ' ' | remove: '<p>' | remove: '</p>' | replace: '<a ', '<a tabindex="-1" '
+  assign after_html = s.text_after | replace: '</p><p>', ' ' | remove: '<p>' | remove: '</p>' | replace: '<a ', '<a tabindex="-1" '
+  assign plain_before = s.text_before | strip_html
+  assign plain_after = s.text_after | strip_html
+  assign heading_tag = s.heading_tag | default: 'h2'
+
+  assign has_media = false
+  if s.image or request.design_mode
+    assign has_media = true
+  endif
+-%}
+
+{% style %}
+  /* ---- Per-instance design tokens (scoped by section id) ---- */
+  #AboutStory-{{ sid }} {
+    --as-bg: {{ s.bg_color }};
+    --as-color-final: {{ s.text_color }};
+    --as-color-muted: {{ s.muted_color }};
+    --as-size-desktop: {{ s.size_desktop }}px;
+    --as-size-mobile: {{ s.size_mobile }}px;
+    --as-lh: 1.3;
+    --as-img-h: {{ s.image_height }};
+    --as-img-radius: {{ s.image_radius }}px;
+    --as-btn-color: {{ s.button_color }};
+    --as-marq-speed: {{ s.marquee_speed }}s;
+    --as-desc-size: {{ s.desc_size }}px;
+    --as-desc-color: {{ s.desc_color }};
+
+    background-color: var(--as-bg);
+    padding-top: {{ s.padding_top }}px;
+    padding-bottom: {{ s.padding_bottom }}px;
+  }
+
+  #AboutStory-{{ sid }} .as-container {
+    max-width: 1240px;
+    margin-inline: auto;
+    padding-inline: clamp(20px, 4vw, 48px);
+  }
+
+  #AboutStory-{{ sid }} .as-visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ==================================================================
+     TEXT FLOW
+     One continuous serif statement; the two richtext halves render as
+     inline spans around the image. Word spans created by JS stay
+     inline elements and whitespace text nodes are preserved, so line
+     breaking (and section height) is identical before and after the
+     split, and with the animation on or off.
+     ================================================================== */
+  #AboutStory-{{ sid }} .as-statement {
+    margin: 0;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: clamp(var(--as-size-mobile), 3.5vw, var(--as-size-desktop));
+    line-height: var(--as-lh);
+    letter-spacing: -0.01em;
+    color: var(--as-color-final);
+    text-align: left;
+    text-wrap: pretty;
+  }
+  #AboutStory-{{ sid }}.as-align-center .as-statement {
+    text-align: center;
+  }
+  #AboutStory-{{ sid }} .as-flow a {
+    color: inherit;
+    text-underline-offset: 0.12em;
+  }
+
+  /* Muted starting color, applied only once JS has claimed the section
+     (as-js) and only when the reveal is enabled — if JS never runs the
+     text stays in its final color. Word spans then override this with
+     per-word inline colors. */
+  #AboutStory-{{ sid }}.as-js[data-reveal] .as-text-part {
+    color: var(--as-color-muted);
+  }
+
+  /* ==================================================================
+     INLINE IMAGE
+     The image is an inline-block box inside the paragraph flow, sized
+     relative to the line height so it scales with the text at every
+     breakpoint. vertical-align: middle + small side margins make it
+     read as a word in the sentence, not a break in it.
+     ================================================================== */
+  #AboutStory-{{ sid }} .as-inline-media {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 0;
+    margin: 0 0.24em;
+    transform-origin: center center;
+  }
+  #AboutStory-{{ sid }} .as-inline-media > img,
+  #AboutStory-{{ sid }} .as-inline-media > svg {
+    display: block;
+    height: calc(1em * var(--as-lh) * var(--as-img-h));
+    width: auto;
+    border-radius: var(--as-img-radius);
+  }
+  #AboutStory-{{ sid }} .as-inline-media > svg {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  /* ==================================================================
+     BUTTON MARQUEE
+     Outlined pill sized by the single static label (the marquee track
+     is an absolutely-positioned overlay, so the pill never stretches).
+     On hover / :focus-visible the static label hides and a strip of
+     four label copies scrolls; the strip is 4 copies wide and the
+     keyframes travel exactly 25% = one copy width, so the loop is
+     seamless and the distance derives from the content width.
+     Paused by default via animation-play-state.
+     ================================================================== */
+  #AboutStory-{{ sid }} .as-actions {
+    margin-top: clamp(32px, 5vw, 56px);
+  }
+  #AboutStory-{{ sid }}.as-align-center .as-actions {
+    text-align: center;
+  }
+  #AboutStory-{{ sid }} .as-btn {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    padding: 13px 30px;
+    border: 1px solid var(--as-btn-color);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--as-btn-color);
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+    max-width: 100%;
+    cursor: pointer;
+  }
+  #AboutStory-{{ sid }} .as-btn:focus-visible {
+    outline: 2px solid var(--as-btn-color);
+    outline-offset: 3px;
+  }
+  #AboutStory-{{ sid }} .as-btn__label {
+    display: inline-block;
+    transition: opacity 0.15s ease;
+  }
+  #AboutStory-{{ sid }} .as-btn__marquee {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+  }
+  #AboutStory-{{ sid }} .as-btn__strip {
+    display: flex;
+    flex: none;
+    min-width: 100%;
+    animation: as-marquee-left var(--as-marq-speed) linear infinite;
+    animation-play-state: paused;
+  }
+  #AboutStory-{{ sid }} .as-btn--right .as-btn__strip {
+    animation-name: as-marquee-right;
+  }
+  #AboutStory-{{ sid }} .as-btn__copy {
+    display: block;
+    padding-inline-end: 2.75em;
+  }
+  #AboutStory-{{ sid }} .as-btn:hover .as-btn__label,
+  #AboutStory-{{ sid }} .as-btn:focus-visible .as-btn__label {
+    opacity: 0;
+  }
+  #AboutStory-{{ sid }} .as-btn:hover .as-btn__marquee,
+  #AboutStory-{{ sid }} .as-btn:focus-visible .as-btn__marquee {
+    opacity: 1;
+  }
+  #AboutStory-{{ sid }} .as-btn:hover .as-btn__strip,
+  #AboutStory-{{ sid }} .as-btn:focus-visible .as-btn__strip {
+    animation-play-state: running;
+  }
+  @keyframes as-marquee-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-25%); }
+  }
+  @keyframes as-marquee-right {
+    from { transform: translateX(-25%); }
+    to { transform: translateX(0); }
+  }
+
+  /* ==================================================================
+     DESCRIPTORS
+     Serif words in a flex row. Hidden state only exists under .as-js
+     with the animation enabled, so no-JS renders them visible. The
+     stagger is a per-item transition-delay driven by --i.
+     ================================================================== */
+  #AboutStory-{{ sid }} .as-descriptors {
+    list-style: none;
+    margin: clamp(48px, 7vw, 88px) 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    row-gap: 0.6em;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-size: clamp(1.1rem, 2vw, var(--as-desc-size));
+    line-height: 1.2;
+    color: var(--as-desc-color);
+  }
+  #AboutStory-{{ sid }}.as-desc-desktop-spread .as-descriptors {
+    justify-content: space-between;
+  }
+  #AboutStory-{{ sid }}.as-desc-desktop-centered .as-descriptors {
+    justify-content: center;
+    column-gap: clamp(2.5rem, 8vw, 7rem);
+  }
+  #AboutStory-{{ sid }} .as-descriptor {
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: calc(var(--i, 0) * 90ms);
+  }
+  #AboutStory-{{ sid }}.as-js[data-desc-anim] .as-descriptor:not(.is-inview) {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  /* ==================================================================
+     RESPONSIVE
+     Statement and inline image scale together through the clamp range
+     (the image height is line-height-relative), so tablet needs no
+     special casing. Below 750px: tighter padding, optional stacked
+     image, descriptor wrap/stack layouts.
+     ================================================================== */
+  @media (max-width: 749px) {
+    #AboutStory-{{ sid }} .as-container {
+      padding-inline: 20px;
+    }
+    #AboutStory-{{ sid }}.as-stack-mobile .as-inline-media {
+      display: block;
+      margin: 0.6em auto;
+      text-align: center;
+    }
+    #AboutStory-{{ sid }}.as-stack-mobile .as-inline-media > img,
+    #AboutStory-{{ sid }}.as-stack-mobile .as-inline-media > svg {
+      height: auto;
+      width: min(78%, 340px);
+      margin-inline: auto;
+    }
+    #AboutStory-{{ sid }}.as-desc-mobile-wrap .as-descriptors {
+      justify-content: center;
+      column-gap: 2.2em;
+    }
+    #AboutStory-{{ sid }}.as-desc-mobile-stack .as-descriptors {
+      flex-direction: column;
+      align-items: center;
+      row-gap: 0.75em;
+    }
+  }
+
+  /* Reduced motion: final state everywhere, no marquee. !important
+     also beats the per-word inline styles if the preference flips
+     mid-session. */
+  @media (prefers-reduced-motion: reduce) {
+    #AboutStory-{{ sid }} .as-text-part,
+    #AboutStory-{{ sid }} .as-word {
+      color: var(--as-color-final) !important;
+    }
+    #AboutStory-{{ sid }} .as-inline-media {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    #AboutStory-{{ sid }} .as-descriptor {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+    #AboutStory-{{ sid }} .as-btn__marquee {
+      display: none !important;
+    }
+    #AboutStory-{{ sid }} .as-btn:hover .as-btn__label,
+    #AboutStory-{{ sid }} .as-btn:focus-visible .as-btn__label {
+      opacity: 1 !important;
+    }
+  }
+{% endstyle %}
+
+<section
+  id="AboutStory-{{ sid }}"
+  class="as-section{% if s.text_align == 'center' %} as-align-center{% endif %}{% if s.stack_mobile %} as-stack-mobile{% endif %} as-desc-desktop-{{ s.desc_layout }} as-desc-mobile-{{ s.desc_layout_mobile }}{% if s.color_scheme != blank %} color-{{ s.color_scheme }}{% endif %}"
+  data-about-story
+  {% if s.enable_reveal %}data-reveal{% endif %}
+  {% if s.enable_image_effect and s.image %}data-img-effect{% endif %}
+  {% if s.enable_desc_anim %}data-desc-anim{% endif %}
+  data-start="{{ s.reveal_start }}"
+  data-end="{{ s.reveal_end }}"
+  data-overlap="{{ s.reveal_overlap }}"
+  data-color-muted="{{ s.muted_color }}"
+  data-color-final="{{ s.text_color }}"
+>
+  <div class="as-container">
+    {%- comment -%} TEXT FLOW + INLINE IMAGE {%- endcomment -%}
+    <{{ heading_tag }} class="as-statement">
+      <span class="as-visually-hidden">{{ plain_before }} {% if s.image.alt != blank %}{{ s.image.alt | escape }} {% endif %}{{ plain_after }}</span>
+      <span class="as-flow" aria-hidden="true">
+        <span class="as-text-part">{{ before_html }}</span>
+        {%- if has_media %}
+        <span class="as-inline-media">
+          {%- if s.image -%}
+            {{ s.image | image_url: width: 800 | image_tag: loading: 'lazy', widths: '300, 450, 600, 800', sizes: '(max-width: 749px) 60vw, 240px', alt: '' }}
+          {%- else -%}
+            {{ 'image' | placeholder_svg_tag }}
+          {%- endif -%}
+        </span>
+        {% endif -%}
+        <span class="as-text-part">{{ after_html }}</span>
+      </span>
+    </{{ heading_tag }}>
+
+    {%- comment -%} BUTTON MARQUEE {%- endcomment -%}
+    {%- if s.show_button and s.button_label != blank -%}
+      <div class="as-actions">
+        <a
+          class="as-btn as-btn--{{ s.marquee_direction }}"
+          {% if s.button_link != blank %}href="{{ s.button_link }}"{% endif %}
+        >
+          <span class="as-btn__label">{{ s.button_label | escape }}</span>
+          <span class="as-btn__marquee" aria-hidden="true">
+            <span class="as-btn__strip">
+              <span class="as-btn__copy">{{ s.button_label | escape }}</span>
+              <span class="as-btn__copy">{{ s.button_label | escape }}</span>
+              <span class="as-btn__copy">{{ s.button_label | escape }}</span>
+              <span class="as-btn__copy">{{ s.button_label | escape }}</span>
+            </span>
+          </span>
+        </a>
+      </div>
+    {%- endif -%}
+
+    {%- comment -%} DESCRIPTORS {%- endcomment -%}
+    {%- if section.blocks.size > 0 -%}
+      <ul class="as-descriptors" role="list">
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'descriptor' and block.settings.word != blank -%}
+            <li
+              class="as-descriptor"
+              style="--i: {{ forloop.index0 }}"
+              {{ block.shopify_attributes }}
+            >{{ block.settings.word | escape }}</li>
+          {%- endif -%}
+        {%- endfor -%}
+      </ul>
+    {%- endif -%}
+  </div>
+</section>
+
+<script>
+  /* ==================================================================
+     SCROLL REVEAL (module — defined once per page, shared by every
+     About Story instance; each instance registers itself below)
+     ================================================================== */
+  (function () {
+    'use strict';
+    if (window.AboutStory) return;
+
+    var registry = [];
+    var rafPending = false;
+    var vh = window.innerHeight;
+    var LUT_STEPS = 40;
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    function clamp01(v) {
+      return v < 0 ? 0 : v > 1 ? 1 : v;
+    }
+    /* Per-word easing: smoothstep — soft entry and exit inside each
+       word's window, linear sweep across the sentence. */
+    function smoothstep(t) {
+      return t * t * (3 - 2 * t);
+    }
+    /* Inline image easing: ease-out cubic. */
+    function easeOutCubic(t) {
+      var u = 1 - t;
+      return 1 - u * u * u;
+    }
+
+    /* Resolve any CSS color string to [r, g, b] via a probe element,
+       so settings survive whatever format the picker stores. */
+    function parseColor(value, host) {
+      var probe = document.createElement('span');
+      probe.style.color = value || '';
+      probe.style.display = 'none';
+      host.appendChild(probe);
+      var m = getComputedStyle(probe).color.match(/[\d.]+/g) || [0, 0, 0];
+      host.removeChild(probe);
+      return [+m[0] || 0, +m[1] || 0, +m[2] || 0];
+    }
+
+    /* Precomputed muted→final color strings: per-frame writes index
+       into this table instead of building strings. */
+    function buildLut(from, to) {
+      var lut = [];
+      for (var i = 0; i <= LUT_STEPS; i++) {
+        var t = i / LUT_STEPS;
+        lut.push(
+          'rgb(' + Math.round(from[0] + (to[0] - from[0]) * t) +
+          ',' + Math.round(from[1] + (to[1] - from[1]) * t) +
+          ',' + Math.round(from[2] + (to[2] - from[2]) * t) + ')'
+        );
+      }
+      return lut;
+    }
+
+    /* Split one text half into word spans. Walks text nodes only, so
+       <em>/<strong>/<a> from the richtext keep their structure and
+       their words are wrapped in place. Whitespace stays as bare text
+       nodes (identical line breaking, no empty spans), and a dataset
+       flag makes the split idempotent. */
+    function splitWords(part) {
+      if (part.dataset.asSplit) return;
+      part.dataset.asSplit = 'true';
+      var walker = document.createTreeWalker(part, NodeFilter.SHOW_TEXT, null);
+      var nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (!/\S/.test(node.nodeValue)) continue;
+        var frag = document.createDocumentFragment();
+        var chunks = node.nodeValue.split(/(\s+)/);
+        for (var j = 0; j < chunks.length; j++) {
+          var chunk = chunks[j];
+          if (!chunk) continue;
+          if (/\S/.test(chunk)) {
+            var w = document.createElement('span');
+            w.className = 'as-word';
+            w.textContent = chunk;
+            frag.appendChild(w);
+          } else {
+            frag.appendChild(document.createTextNode(chunk));
+          }
+        }
+        node.parentNode.replaceChild(frag, node);
+      }
+    }
+
+    function teardown(root) {
+      var st = root.__aboutStory;
+      if (!st) return;
+      if (st.io) st.io.disconnect();
+      var i = registry.indexOf(st);
+      if (i > -1) registry.splice(i, 1);
+      root.__aboutStory = null;
+    }
+
+    function init(root) {
+      if (!root || !root.hasAttribute('data-about-story')) return;
+      teardown(root);
+      if (reduceMotion.matches) {
+        root.classList.remove('as-js');
+        return;
+      }
+      try {
+        root.classList.add('as-js');
+
+        var st = {
+          root: root,
+          measure: root.querySelector('.as-statement'),
+          items: [],
+          lut: null,
+          lastP: -1,
+          start: parseFloat(root.getAttribute('data-start')) || 85,
+          end: parseFloat(root.getAttribute('data-end')) || 35,
+          overlap: Math.max(1, parseFloat(root.getAttribute('data-overlap')) || 4),
+          io: null
+        };
+
+        var reveal = root.hasAttribute('data-reveal');
+        var imgFx = root.hasAttribute('data-img-effect');
+
+        if (reveal && st.measure) {
+          st.lut = buildLut(
+            parseColor(root.getAttribute('data-color-muted'), root),
+            parseColor(root.getAttribute('data-color-final'), root)
+          );
+          var parts = root.querySelectorAll('.as-text-part');
+          for (var i = 0; i < parts.length; i++) splitWords(parts[i]);
+          /* Sequence in DOM (= reading) order; the inline image joins
+             the sequence at its own position so it reveals when the
+             sentence reaches it. */
+          var seq = st.measure.querySelectorAll('.as-word, .as-inline-media');
+          for (i = 0; i < seq.length; i++) {
+            if (seq[i].classList.contains('as-inline-media')) {
+              if (imgFx) st.items.push({ el: seq[i], kind: 'media', last: -1 });
+            } else {
+              st.items.push({ el: seq[i], kind: 'word', last: -1 });
+            }
+          }
+        } else if (imgFx) {
+          var media = root.querySelector('.as-inline-media');
+          if (media) st.items.push({ el: media, kind: 'media', last: -1 });
+        }
+
+        /* DESCRIPTORS: one-shot staggered reveal on entry. */
+        if (root.hasAttribute('data-desc-anim')) {
+          var descs = root.querySelectorAll('.as-descriptor');
+          if (descs.length && 'IntersectionObserver' in window) {
+            st.io = new IntersectionObserver(function (entries) {
+              for (var e = 0; e < entries.length; e++) {
+                if (entries[e].isIntersecting) {
+                  entries[e].target.classList.add('is-inview');
+                  st.io.unobserve(entries[e].target);
+                }
+              }
+            }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
+            for (var d = 0; d < descs.length; d++) st.io.observe(descs[d]);
+          } else {
+            for (var d2 = 0; d2 < descs.length; d2++) descs[d2].classList.add('is-inview');
+          }
+        }
+
+        root.__aboutStory = st;
+        if (st.items.length && st.measure) {
+          registry.push(st);
+          applyItems(st, progressFor(st, st.measure.getBoundingClientRect()));
+        }
+      } catch (err) {
+        /* Never leave the text stuck muted if anything above fails. */
+        root.classList.remove('as-js');
+        if (window.console) console.error('AboutStory init failed', err);
+      }
+    }
+
+    /* Progress: 0 when the statement's top sits at the start offset
+       (viewport %), 1 when its bottom reaches the end offset. Element
+       height is part of the travel, so long statements finish reading
+       correctly on short (mobile) viewports too. */
+    function progressFor(st, rect) {
+      var startPx = vh * st.start / 100;
+      var endPx = vh * st.end / 100;
+      var travel = (startPx - endPx) + rect.height;
+      if (travel < 1) travel = 1;
+      return clamp01((startPx - rect.top) / travel);
+    }
+
+    /* Map progress across the item sequence with overlap: item i runs
+       f = clamp((p * (n - 1 + k) - i) / k), so ~k neighbours are in
+       transition at once — a smooth sweep, not a word-by-word snap.
+       Writes are quantized and skipped when unchanged. */
+    function applyItems(st, p) {
+      if (st.lastP !== -1 && Math.abs(p - st.lastP) < 0.0005) return;
+      st.lastP = p;
+      var n = st.items.length;
+      var span = n - 1 + st.overlap;
+      for (var i = 0; i < n; i++) {
+        var f = clamp01((p * span - i) / st.overlap);
+        var item = st.items[i];
+        if (item.kind === 'word') {
+          var idx = Math.round(smoothstep(f) * LUT_STEPS);
+          if (idx !== item.last) {
+            item.last = idx;
+            item.el.style.color = st.lut[idx];
+          }
+        } else {
+          var e = easeOutCubic(f);
+          var q = Math.round(e * 200);
+          if (q !== item.last) {
+            item.last = q;
+            item.el.style.opacity = (0.35 + 0.65 * e).toFixed(3);
+            item.el.style.transform = 'scale(' + (0.9 + 0.1 * e).toFixed(4) + ')';
+          }
+        }
+      }
+    }
+
+    /* One rAF tick for every instance: all layout reads first, then
+       all style writes — nothing forces layout mid-loop. */
+    function tick() {
+      rafPending = false;
+      var rects = [];
+      var i;
+      for (i = 0; i < registry.length; i++) {
+        rects.push(registry[i].measure.getBoundingClientRect());
+      }
+      for (i = 0; i < registry.length; i++) {
+        applyItems(registry[i], progressFor(registry[i], rects[i]));
+      }
+    }
+
+    function requestTick() {
+      if (!rafPending && registry.length) {
+        rafPending = true;
+        window.requestAnimationFrame(tick);
+      }
+    }
+
+    window.addEventListener('scroll', requestTick, { passive: true });
+    window.addEventListener('load', requestTick);
+
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(function () {
+        vh = window.innerHeight;
+        requestTick();
+      }, 150);
+    });
+
+    if (reduceMotion.addEventListener) {
+      reduceMotion.addEventListener('change', function () {
+        var roots = document.querySelectorAll('[data-about-story]');
+        for (var i = 0; i < roots.length; i++) init(roots[i]);
+      });
+    }
+
+    /* Theme editor: sections are re-rendered with fresh markup, so
+       re-init on load and drop state on unload. The idempotent init
+       (teardown + split guard) means no duplicated spans either way. */
+    document.addEventListener('shopify:section:load', function (e) {
+      var root = e.target.querySelector('[data-about-story]');
+      if (root) init(root);
+    });
+    document.addEventListener('shopify:section:unload', function (e) {
+      var root = e.target.querySelector('[data-about-story]');
+      if (root) teardown(root);
+    });
+
+    window.AboutStory = { init: init };
+  })();
+
+  /* This runs synchronously right after this instance's markup, so the
+     muted state and first paint of the reveal land before first render
+     — no flash, no layout shift. */
+  window.AboutStory.init(document.getElementById('AboutStory-{{ sid }}'));
+</script>
+
+{% schema %}
+{
+  "name": "About Story",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "Text"
+    },
+    {
+      "type": "richtext",
+      "id": "text_before",
+      "label": "Text before image",
+      "default": "<p>We believe beauty should feel effortless —</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "text_after",
+      "label": "Text after image",
+      "default": "<p>made with intention, in small batches, for the quiet rituals of every day.</p>",
+      "info": "The image sits between the two fields. Move words between them to move the image."
+    },
+    {
+      "type": "range",
+      "id": "size_desktop",
+      "label": "Text size — desktop",
+      "min": 28,
+      "max": 72,
+      "step": 2,
+      "unit": "px",
+      "default": 52
+    },
+    {
+      "type": "range",
+      "id": "size_mobile",
+      "label": "Text size — mobile",
+      "min": 18,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 27
+    },
+    {
+      "type": "select",
+      "id": "text_align",
+      "label": "Text alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Final text color",
+      "default": "#3B2E25"
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag (SEO)",
+      "options": [
+        { "value": "h2", "label": "H2" },
+        { "value": "h3", "label": "H3" },
+        { "value": "div", "label": "Plain text (div)" }
+      ],
+      "default": "h2"
+    },
+    {
+      "type": "header",
+      "content": "Image"
+    },
+    {
+      "type": "image_picker",
+      "id": "image",
+      "label": "Image"
+    },
+    {
+      "type": "range",
+      "id": "image_height",
+      "label": "Image height (× line height)",
+      "min": 1.0,
+      "max": 2.0,
+      "step": 0.1,
+      "default": 1.2
+    },
+    {
+      "type": "range",
+      "id": "image_radius",
+      "label": "Corner radius",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "checkbox",
+      "id": "stack_mobile",
+      "label": "Stack image on mobile",
+      "info": "Places the image as a centered block between the two text parts below 750px.",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_image_effect",
+      "label": "Enable image scroll effect",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show button",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Label",
+      "default": "ABOUT US"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Link"
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Text and border color",
+      "default": "#3B2E25"
+    },
+    {
+      "type": "select",
+      "id": "marquee_direction",
+      "label": "Marquee direction",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "marquee_speed",
+      "label": "Marquee speed (seconds per loop)",
+      "min": 2,
+      "max": 12,
+      "step": 0.5,
+      "unit": "s",
+      "default": 6
+    },
+    {
+      "type": "header",
+      "content": "Descriptors"
+    },
+    {
+      "type": "range",
+      "id": "desc_size",
+      "label": "Descriptor size — desktop",
+      "min": 18,
+      "max": 44,
+      "step": 1,
+      "unit": "px",
+      "default": 30
+    },
+    {
+      "type": "color",
+      "id": "desc_color",
+      "label": "Descriptor color",
+      "default": "#3B2E25"
+    },
+    {
+      "type": "select",
+      "id": "desc_layout",
+      "label": "Desktop layout",
+      "options": [
+        { "value": "spread", "label": "Spread across row" },
+        { "value": "centered", "label": "Centered with gaps" }
+      ],
+      "default": "spread"
+    },
+    {
+      "type": "select",
+      "id": "desc_layout_mobile",
+      "label": "Mobile layout",
+      "options": [
+        { "value": "wrap", "label": "Wrap" },
+        { "value": "stack", "label": "Stack" }
+      ],
+      "default": "wrap"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_desc_anim",
+      "label": "Enable descriptor animation",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Scroll animation"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_reveal",
+      "label": "Enable text reveal",
+      "default": true
+    },
+    {
+      "type": "color",
+      "id": "muted_color",
+      "label": "Muted starting color",
+      "info": "The color words start in before the scroll reveals them.",
+      "default": "#DDD5CA"
+    },
+    {
+      "type": "range",
+      "id": "reveal_start",
+      "label": "Reveal start offset",
+      "info": "Viewport position where the reveal begins (100 = bottom edge).",
+      "min": 50,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
+      "default": 85
+    },
+    {
+      "type": "range",
+      "id": "reveal_end",
+      "label": "Reveal end offset",
+      "info": "Viewport position where the reveal completes (0 = top edge).",
+      "min": 0,
+      "max": 60,
+      "step": 1,
+      "unit": "%",
+      "default": 35
+    },
+    {
+      "type": "range",
+      "id": "reveal_overlap",
+      "label": "Word overlap softness",
+      "info": "How many neighboring words transition together.",
+      "min": 1,
+      "max": 8,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Colors & Spacing"
+    },
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Section background",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "info": "Optional. The colors above take priority over the scheme."
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Padding top",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 96
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Padding bottom",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 96
+    }
+  ],
+  "max_blocks": 6,
+  "blocks": [
+    {
+      "type": "descriptor",
+      "name": "Descriptor",
+      "settings": [
+        {
+          "type": "text",
+          "id": "word",
+          "label": "Word",
+          "default": "Playful"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "About Story",
+      "blocks": [
+        { "type": "descriptor", "settings": { "word": "Playful" } },
+        { "type": "descriptor", "settings": { "word": "Essential" } },
+        { "type": "descriptor", "settings": { "word": "Intimate" } }
+      ]
+    }
+  ]
+}
+{% endschema %}
