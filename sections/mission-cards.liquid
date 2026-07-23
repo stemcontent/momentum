@@ -1,0 +1,891 @@
+{% comment %}
+  ------------------------------------------------------------------
+  Mission Cards — editorial three-card section, no boxes
+  ------------------------------------------------------------------
+  Card anatomy top to bottom: hairline rule, serif number, serif
+  title, quiet body. No backgrounds, no borders beyond the top
+  hairline, no shadows. Desktop/tablet rows carry a vertical offset
+  cascade (each successive card in a row shifts down).
+
+  Scroll animation (linked + reversible): per card, the hairline
+  draws left-to-right (scaleX), then number, title and body rise
+  ~24px and fade, with a small internal stagger. Cards in the same
+  row are offset by the "stagger amount" setting. Progress values
+  live in CSS custom properties whose defaults equal the final
+  state, so a no-JS visit renders everything fully visible.
+
+  Scoped by section id; multiple instances safe; re-initializes on
+  shopify:section:load. Vanilla JS, one passive scroll listener,
+  rAF-throttled, measurements cached outside the frame loop.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  assign cols = s.columns
+  if cols > 2
+    assign t_cols = 2
+  else
+    assign t_cols = cols
+  endif
+-%}
+
+{% style %}
+  /* ---- Per-instance design tokens ---- */
+  #MissionCards-{{ sid }} {
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --mc-bg: {{ s.color_bg }};
+    --mc-ink: {{ s.color_heading }};
+    --mc-muted: {{ s.color_label }};
+    --mc-title: {{ s.color_title }};
+    --mc-body: {{ s.color_body }};
+    --mc-num: {{ s.color_number }};
+    --mc-hairline: {{ s.color_hairline }};
+    --mc-cols: {{ cols }};
+    --mc-cols-t: {{ t_cols }};
+    --mc-offset: {{ s.offset }}px;
+    --mc-heading-size: clamp({{ s.heading_size_m }}px, 4vw, {{ s.heading_size }}px);
+    --mc-title-size: clamp({{ s.title_size | times: 0.85 | round }}px, 2vw, {{ s.title_size }}px);
+    --mc-body-size: {{ s.body_size }}px;
+    --mc-icon-size: {{ s.icon_size }}px;
+
+    position: relative;
+    overflow: hidden;
+    background-color: var(--mc-bg);
+    color: var(--mc-body);
+    padding-top: {{ s.pad_top }}px;
+    padding-bottom: {{ s.pad_bottom }}px;
+  }
+
+  #MissionCards-{{ sid }} .mc-container {
+    position: relative;
+    z-index: 1;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ---- Header ---- */
+  #MissionCards-{{ sid }} .mc-header {
+    margin-bottom: 64px;
+    text-align: {{ s.align }};
+  }
+  #MissionCards-{{ sid }} .mc-label {
+    display: block;
+    margin: 0 0 20px;
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--mc-muted);
+  }
+  #MissionCards-{{ sid }} .mc-heading {
+    margin: 0;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: var(--mc-heading-size);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    color: var(--mc-ink);
+  }
+  #MissionCards-{{ sid }} .mc-intro {
+    max-width: 58ch;
+    margin: 20px 0 0;
+    font-size: calc(var(--mc-body-size) + 1px);
+    line-height: 1.7;
+    color: var(--mc-body);
+  }
+  #MissionCards-{{ sid }} .mc-intro p { margin: 0 0 0.6em; }
+  #MissionCards-{{ sid }} .mc-intro p:last-child { margin-bottom: 0; }
+  {% if s.align == 'center' %}
+  #MissionCards-{{ sid }} .mc-intro { margin-left: auto; margin-right: auto; }
+  {% endif %}
+
+  /* ---- Card grid with offset cascade ---- */
+  #MissionCards-{{ sid }} .mc-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 56px 44px;
+    align-items: start;
+  }
+
+  #MissionCards-{{ sid }} .mc-card__inner {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+  }
+  #MissionCards-{{ sid }} a.mc-card__inner:focus-visible {
+    outline: 1px solid var(--mc-ink);
+    outline-offset: 6px;
+  }
+  #MissionCards-{{ sid }} a.mc-card__inner .mc-card__title {
+    transition: opacity 400ms var(--ease);
+  }
+  #MissionCards-{{ sid }} a.mc-card__inner:hover .mc-card__title {
+    opacity: 0.6;
+  }
+
+  /* Animation custom properties default to 1 (final state) so the
+     content is fully visible whenever JS does not run */
+  #MissionCards-{{ sid }} .mc-card__rule {
+    display: block;
+    height: 1px;
+    margin-bottom: 26px;
+    background-color: var(--mc-hairline);
+    transform: scaleX(var(--mc-r, 1));
+    transform-origin: left;
+  }
+  #MissionCards-{{ sid }} .mc-card__num {
+    display: block;
+    margin-bottom: 18px;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    color: var(--mc-num);
+    opacity: var(--mc-a, 1);
+    transform: translateY(calc((1 - var(--mc-a, 1)) * 24px));
+  }
+  #MissionCards-{{ sid }} .mc-card__icon {
+    display: block;
+    width: var(--mc-icon-size);
+    margin-bottom: 18px;
+    opacity: var(--mc-a, 1);
+    transform: translateY(calc((1 - var(--mc-a, 1)) * 24px));
+  }
+  #MissionCards-{{ sid }} .mc-card__icon img {
+    width: 100%;
+    height: auto;
+  }
+  #MissionCards-{{ sid }} .mc-card__title {
+    margin: 0 0 14px;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: var(--mc-title-size);
+    line-height: 1.25;
+    color: var(--mc-title);
+    opacity: var(--mc-b, 1);
+    transform: translateY(calc((1 - var(--mc-b, 1)) * 24px));
+  }
+  #MissionCards-{{ sid }} .mc-card__body {
+    font-size: var(--mc-body-size);
+    line-height: 1.7;
+    color: var(--mc-body);
+    opacity: var(--mc-c, 1);
+    transform: translateY(calc((1 - var(--mc-c, 1)) * 24px));
+  }
+  #MissionCards-{{ sid }} .mc-card__body p { margin: 0 0 0.6em; }
+  #MissionCards-{{ sid }} .mc-card__body p:last-child { margin-bottom: 0; }
+
+  /* ---- Decorative illustration blocks ---- */
+  #MissionCards-{{ sid }} .mc-illo {
+    position: absolute;
+    z-index: 0;
+    width: var(--illo-size);
+    opacity: var(--illo-o);
+    pointer-events: none;
+  }
+  #MissionCards-{{ sid }} .mc-illo--above { z-index: 2; }
+  #MissionCards-{{ sid }} .mc-illo img {
+    width: 100%;
+    height: auto;
+    transform: rotate(var(--illo-rot));
+  }
+  #MissionCards-{{ sid }} .mc-illo--top-left { top: calc(4% + var(--illo-y)); left: calc(4% + var(--illo-x)); }
+  #MissionCards-{{ sid }} .mc-illo--top-right { top: calc(4% + var(--illo-y)); right: calc(4% - var(--illo-x)); }
+  #MissionCards-{{ sid }} .mc-illo--beside-heading { top: calc(6% + var(--illo-y)); right: calc(12% - var(--illo-x)); }
+  #MissionCards-{{ sid }} .mc-illo--left-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); left: calc(2% + var(--illo-x)); }
+  #MissionCards-{{ sid }} .mc-illo--right-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); right: calc(2% - var(--illo-x)); }
+  #MissionCards-{{ sid }} .mc-illo--bottom-left { bottom: calc(4% - var(--illo-y)); left: calc(4% + var(--illo-x)); }
+  #MissionCards-{{ sid }} .mc-illo--bottom-right { bottom: calc(4% - var(--illo-y)); right: calc(4% - var(--illo-x)); }
+
+  #MissionCards-{{ sid }}[data-animate='true'] .mc-illo--float {
+    animation: mc-illo-float var(--illo-float, 8s) ease-in-out infinite;
+  }
+  @keyframes mc-illo-float {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -12px, 0); }
+  }
+
+  /* ---- Responsive: tablet keeps the cascade at 2 columns (or the
+     column count if it fits); mobile is one column, no offsets ---- */
+  @media (min-width: 750px) {
+    #MissionCards-{{ sid }} .mc-container { padding: 0 40px; }
+    #MissionCards-{{ sid }} .mc-grid {
+      grid-template-columns: repeat(var(--mc-cols-t), minmax(0, 1fr));
+    }
+    #MissionCards-{{ sid }} .mc-card {
+      margin-top: calc(var(--mc-ci-t, 0) * var(--mc-offset));
+    }
+  }
+  @media (min-width: 990px) {
+    #MissionCards-{{ sid }} .mc-grid {
+      grid-template-columns: repeat(var(--mc-cols), minmax(0, 1fr));
+    }
+    #MissionCards-{{ sid }} .mc-card {
+      margin-top: calc(var(--mc-ci, 0) * var(--mc-offset));
+    }
+  }
+  @media (max-width: 749px) {
+    #MissionCards-{{ sid }} {
+      padding-top: {{ s.pad_top_m }}px;
+      padding-bottom: {{ s.pad_bottom_m }}px;
+    }
+    #MissionCards-{{ sid }} .mc-header { margin-bottom: 44px; }
+    #MissionCards-{{ sid }} .mc-grid { gap: 44px; }
+    #MissionCards-{{ sid }} .mc-illo { display: none; }
+    #MissionCards-{{ sid }} .mc-illo--m { display: block; }
+  }
+
+  /* ---- Reduced motion: final state, no float ---- */
+  @media (prefers-reduced-motion: reduce) {
+    #MissionCards-{{ sid }} .mc-card__rule { transform: none !important; }
+    #MissionCards-{{ sid }} .mc-card__num,
+    #MissionCards-{{ sid }} .mc-card__icon,
+    #MissionCards-{{ sid }} .mc-card__title,
+    #MissionCards-{{ sid }} .mc-card__body {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    #MissionCards-{{ sid }} .mc-illo { animation: none !important; }
+  }
+{% endstyle %}
+
+<div
+  id="MissionCards-{{ sid }}"
+  data-mission-cards
+  data-animate="{{ s.enable_animations }}"
+  data-start="{{ s.anim_start }}"
+  data-end="{{ s.anim_end }}"
+  data-stagger="{{ s.stagger }}"
+>
+  {%- for block in section.blocks -%}
+    {%- if block.type == 'illustration' and block.settings.image != blank -%}
+      <div
+        class="mc-illo mc-illo--{{ block.settings.position }}{% if block.settings.show_mobile %} mc-illo--m{% endif %}{% if block.settings.float %} mc-illo--float{% endif %}{% if block.settings.above %} mc-illo--above{% endif %}"
+        style="--illo-size: {{ block.settings.size }}px; --illo-x: {{ block.settings.offset_x }}px; --illo-y: {{ block.settings.offset_y }}px; --illo-rot: {{ block.settings.rotation }}deg; --illo-o: {{ block.settings.opacity | divided_by: 100.0 }}; --illo-float: {{ block.settings.float_speed }}s;"
+        aria-hidden="true"
+        {{ block.shopify_attributes }}
+      >
+        {{ block.settings.image | image_url: width: 560 | image_tag: loading: 'lazy', alt: '', widths: '280, 560', sizes: '280px' }}
+      </div>
+    {%- endif -%}
+  {%- endfor -%}
+
+  <div class="mc-container">
+    {%- if s.show_label or s.heading != blank or s.intro != blank -%}
+      <div class="mc-header">
+        {%- if s.show_label and s.label_text != blank -%}
+          <span class="mc-label">{{ s.label_text | escape }}</span>
+        {%- endif -%}
+        {%- if s.heading != blank -%}
+          <{{ s.heading_tag }} class="mc-heading">{{ s.heading | escape }}</{{ s.heading_tag }}>
+        {%- endif -%}
+        {%- if s.intro != blank -%}
+          <div class="mc-intro">{{ s.intro }}</div>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+
+    <ul class="mc-grid" role="list">
+      {%- assign card_i = 0 -%}
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'card' -%}
+          {%- liquid
+            assign col_d = card_i | modulo: cols
+            assign col_t = card_i | modulo: t_cols
+            assign card_i = card_i | plus: 1
+            assign num = card_i | prepend: '00' | slice: -2, 2
+            if block.settings.number_label != blank
+              assign num = block.settings.number_label
+            endif
+          -%}
+          <li
+            class="mc-card"
+            style="--mc-ci: {{ col_d }}; --mc-ci-t: {{ col_t }};"
+            data-card
+            data-col="{{ col_d }}"
+            data-col-t="{{ col_t }}"
+            {{ block.shopify_attributes }}
+          >
+            {%- if block.settings.link != blank -%}
+              <a class="mc-card__inner" href="{{ block.settings.link }}">
+            {%- else -%}
+              <div class="mc-card__inner">
+            {%- endif -%}
+              <span class="mc-card__rule" aria-hidden="true"></span>
+              {%- if s.show_numbers -%}
+                <span class="mc-card__num">{{ num | escape }}</span>
+              {%- endif -%}
+              {%- if block.settings.icon != blank -%}
+                <span class="mc-card__icon">
+                  {{ block.settings.icon | image_url: width: 240 | image_tag: loading: 'lazy', alt: '', widths: '120, 240', sizes: '120px' }}
+                </span>
+              {%- endif -%}
+              {%- if block.settings.title != blank -%}
+                <h3 class="mc-card__title">{{ block.settings.title | escape }}</h3>
+              {%- endif -%}
+              {%- if block.settings.body != blank -%}
+                <div class="mc-card__body">{{ block.settings.body }}</div>
+              {%- endif -%}
+            {%- if block.settings.link != blank -%}
+              </a>
+            {%- else -%}
+              </div>
+            {%- endif -%}
+          </li>
+        {%- endif -%}
+      {%- endfor -%}
+    </ul>
+  </div>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    function initMissionCards(root) {
+      if (!root || root.dataset.init === 'true') return;
+      root.dataset.init = 'true';
+
+      var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
+      if (root.dataset.animate !== 'true' || prm.matches) return;
+
+      var cards = Array.prototype.slice.call(root.querySelectorAll('[data-card]'));
+      if (!cards.length) return;
+
+      var startPct = (parseFloat(root.dataset.start) || 85) / 100;
+      var endPct = (parseFloat(root.dataset.end) || 45) / 100;
+      var stagger = (parseFloat(root.dataset.stagger) || 0) / 100;
+
+      var vh = 1;
+      var items = [];
+      var ticking = false;
+
+      function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+      function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+      function phase(p, a, b) { return easeOut(clamp01((p - a) / (b - a))); }
+
+      /* Cache document-space tops and the breakpoint-correct stagger
+         index outside the frame loop */
+      function measure() {
+        vh = window.innerHeight || 1;
+        var y = window.scrollY;
+        var wide = window.innerWidth >= 990;
+        var mid = window.innerWidth >= 750;
+        items = cards.map(function (el) {
+          var col = wide ? el.dataset.col : mid ? el.dataset.colT : 0;
+          return {
+            el: el,
+            top: el.getBoundingClientRect().top + y,
+            delay: Math.min(0.8, (parseInt(col, 10) || 0) * stagger)
+          };
+        });
+      }
+
+      function frame() {
+        ticking = false;
+        var y = window.scrollY;
+        var startPx = vh * startPct;
+        var endPx = vh * endPct;
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          var inView = it.top - y;
+          var raw = clamp01((startPx - inView) / (startPx - endPx));
+          var p = it.delay > 0 ? clamp01((raw - it.delay) / (1 - it.delay)) : raw;
+          var st = it.el.style;
+          st.setProperty('--mc-r', phase(p, 0, 0.35).toFixed(3));
+          st.setProperty('--mc-a', phase(p, 0.15, 0.55).toFixed(3));
+          st.setProperty('--mc-b', phase(p, 0.25, 0.7).toFixed(3));
+          st.setProperty('--mc-c', phase(p, 0.35, 0.85).toFixed(3));
+        }
+      }
+
+      function onScroll() {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(frame);
+        }
+      }
+
+      var resizeTimer = null;
+      function onResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () { measure(); onScroll(); }, 150);
+      }
+
+      function toFinal() {
+        window.removeEventListener('scroll', onScroll);
+        items.forEach(function (it) {
+          it.el.style.removeProperty('--mc-r');
+          it.el.style.removeProperty('--mc-a');
+          it.el.style.removeProperty('--mc-b');
+          it.el.style.removeProperty('--mc-c');
+        });
+      }
+
+      /* First paint: set progress synchronously so nothing flashes */
+      measure();
+      frame();
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onResize);
+      window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+
+      function onMotionChange() {
+        if (prm.matches) toFinal();
+      }
+      if (prm.addEventListener) prm.addEventListener('change', onMotionChange);
+
+      root.__teardown = function () {
+        toFinal();
+        window.removeEventListener('resize', onResize);
+        if (prm.removeEventListener) prm.removeEventListener('change', onMotionChange);
+      };
+    }
+
+    if (!window.__missionCardsReady) {
+      window.__missionCardsReady = true;
+      document.addEventListener('shopify:section:load', function (event) {
+        var el = event.target.querySelector('[data-mission-cards]');
+        if (el) initMissionCards(el);
+      });
+      document.addEventListener('shopify:section:unload', function (event) {
+        var el = event.target.querySelector('[data-mission-cards]');
+        if (el && el.__teardown) el.__teardown();
+      });
+    }
+    initMissionCards(document.getElementById('MissionCards-{{ sid }}'));
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Mission cards",
+  "tag": "section",
+  "class": "section-mission-cards",
+  "max_blocks": 10,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_label",
+      "label": "Show micro-label",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "label_text",
+      "label": "Micro-label",
+      "default": "OUR MISSION"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Why we make things"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro paragraph",
+      "info": "Optional. Leave empty to hide."
+    },
+    {
+      "type": "select",
+      "id": "align",
+      "label": "Header alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_numbers",
+      "label": "Show card numbers",
+      "default": true,
+      "info": "Auto-generated 01, 02, 03 from card order. Each card can override its label."
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "columns",
+      "label": "Columns on desktop",
+      "min": 2,
+      "max": 4,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "range",
+      "id": "offset",
+      "label": "Vertical offset cascade",
+      "min": 0,
+      "max": 80,
+      "step": 5,
+      "unit": "px",
+      "default": 30,
+      "info": "Each successive card in a row shifts down by this amount. Desktop and tablet only."
+    },
+    {
+      "type": "header",
+      "content": "Typography"
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag",
+      "options": [
+        { "value": "h1", "label": "H1" },
+        { "value": "h2", "label": "H2" },
+        { "value": "h3", "label": "H3" }
+      ],
+      "default": "h2"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size — desktop",
+      "min": 24,
+      "max": 72,
+      "step": 2,
+      "unit": "px",
+      "default": 44
+    },
+    {
+      "type": "range",
+      "id": "heading_size_m",
+      "label": "Heading size — mobile",
+      "min": 20,
+      "max": 48,
+      "step": 2,
+      "unit": "px",
+      "default": 30
+    },
+    {
+      "type": "range",
+      "id": "title_size",
+      "label": "Card title size",
+      "min": 16,
+      "max": 32,
+      "step": 1,
+      "unit": "px",
+      "default": 22
+    },
+    {
+      "type": "range",
+      "id": "body_size",
+      "label": "Card body size",
+      "min": 12,
+      "max": 18,
+      "step": 1,
+      "unit": "px",
+      "default": 15
+    },
+    {
+      "type": "range",
+      "id": "icon_size",
+      "label": "Card icon size",
+      "min": 24,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 44
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "color_bg",
+      "label": "Background",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color",
+      "id": "color_heading",
+      "label": "Heading",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "color",
+      "id": "color_label",
+      "label": "Micro-label",
+      "default": "#8A7566"
+    },
+    {
+      "type": "color",
+      "id": "color_title",
+      "label": "Card titles",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "color",
+      "id": "color_body",
+      "label": "Card body",
+      "default": "#5C4A3D"
+    },
+    {
+      "type": "color",
+      "id": "color_number",
+      "label": "Card numbers",
+      "default": "#8A7566"
+    },
+    {
+      "type": "color",
+      "id": "color_hairline",
+      "label": "Hairlines",
+      "default": "#E3D7C3"
+    },
+    {
+      "type": "header",
+      "content": "Animation"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_animations",
+      "label": "Enable animations",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "anim_start",
+      "label": "Animation start (viewport offset)",
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 85,
+      "info": "Progress is 0 when a card's top reaches this share of the viewport height."
+    },
+    {
+      "type": "range",
+      "id": "anim_end",
+      "label": "Animation end (viewport offset)",
+      "min": 10,
+      "max": 80,
+      "step": 5,
+      "unit": "%",
+      "default": 45
+    },
+    {
+      "type": "range",
+      "id": "stagger",
+      "label": "Stagger between cards",
+      "min": 0,
+      "max": 30,
+      "step": 2,
+      "default": 10
+    },
+    {
+      "type": "header",
+      "content": "Spacing"
+    },
+    {
+      "type": "range",
+      "id": "pad_top",
+      "label": "Top padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 112
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom",
+      "label": "Bottom padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 112
+    },
+    {
+      "type": "range",
+      "id": "pad_top_m",
+      "label": "Top padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom_m",
+      "label": "Bottom padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    }
+  ],
+  "blocks": [
+    {
+      "type": "card",
+      "name": "Card",
+      "settings": [
+        {
+          "type": "text",
+          "id": "number_label",
+          "label": "Custom number label",
+          "info": "Overrides the auto-generated 01, 02, 03."
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Title",
+          "default": "Material honesty"
+        },
+        {
+          "type": "richtext",
+          "id": "body",
+          "label": "Body",
+          "default": "<p>Two to four quiet lines about this pillar of the mission.</p>"
+        },
+        {
+          "type": "image_picker",
+          "id": "icon",
+          "label": "Small illustration or icon",
+          "info": "Optional. Sized by the section's icon size setting."
+        },
+        {
+          "type": "url",
+          "id": "link",
+          "label": "Link",
+          "info": "Optional. Makes the whole card clickable."
+        }
+      ]
+    },
+    {
+      "type": "illustration",
+      "name": "Illustration",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image",
+          "info": "Transparent PNG brand element. Decorative only."
+        },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "options": [
+            { "value": "top-left", "label": "Top left" },
+            { "value": "top-right", "label": "Top right" },
+            { "value": "beside-heading", "label": "Beside heading" },
+            { "value": "left-center", "label": "Left of content" },
+            { "value": "right-center", "label": "Right of content" },
+            { "value": "bottom-left", "label": "Bottom left" },
+            { "value": "bottom-right", "label": "Bottom right" }
+          ],
+          "default": "top-right"
+        },
+        {
+          "type": "range",
+          "id": "offset_x",
+          "label": "Offset X",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "offset_y",
+          "label": "Offset Y",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "size",
+          "label": "Size",
+          "min": 40,
+          "max": 280,
+          "step": 4,
+          "unit": "px",
+          "default": 120
+        },
+        {
+          "type": "range",
+          "id": "rotation",
+          "label": "Rotation",
+          "min": -30,
+          "max": 30,
+          "step": 1,
+          "unit": "deg",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "opacity",
+          "label": "Opacity",
+          "min": 10,
+          "max": 100,
+          "step": 5,
+          "unit": "%",
+          "default": 100
+        },
+        {
+          "type": "checkbox",
+          "id": "show_mobile",
+          "label": "Show on mobile",
+          "default": false
+        },
+        {
+          "type": "checkbox",
+          "id": "float",
+          "label": "Slow float animation",
+          "default": false
+        },
+        {
+          "type": "range",
+          "id": "float_speed",
+          "label": "Float duration",
+          "min": 6,
+          "max": 10,
+          "step": 0.5,
+          "unit": "s",
+          "default": 8
+        },
+        {
+          "type": "checkbox",
+          "id": "above",
+          "label": "Place above content",
+          "default": false
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Mission cards",
+      "blocks": [
+        { "type": "card" },
+        { "type": "card" },
+        { "type": "card" }
+      ]
+    }
+  ]
+}
+{% endschema %}

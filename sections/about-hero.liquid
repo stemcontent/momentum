@@ -1,0 +1,1080 @@
+{% comment %}
+  ------------------------------------------------------------------
+  About Hero — full-viewport typographic statement
+  ------------------------------------------------------------------
+  No background photo: the serif statement IS the hero. Two richtext
+  segments flow as one sentence around an inline image whose height
+  is a multiple of the line height, so the text wraps around it.
+
+  Animation layers:
+    1. Load (one-shot, first paint): words sweep up + fade with a
+       fast stagger (< 1.2s total), then the inline image reveals
+       with an upward clip-path wipe. Skipped under reduced motion.
+    2. Scroll (linked, reversible): the statement drifts up slightly
+       slower than the page; illustration blocks drift at their own
+       per-block parallax rates.
+
+  Progressive enhancement: the "hidden" pre-animation state is only
+  applied by JS (classes ah-pre / ah-play added before first paint by
+  the inline script). If JS never runs, everything renders in its
+  final state. All CSS is scoped by section id; safe for multiple
+  instances; re-initializes on shopify:section:load.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  comment
+    Image shape: rectangle uses the corner-radius slider (0 = sharp),
+    rounded is a full pill, arch is fully rounded top corners only.
+  endcomment
+  case s.image_shape
+    when 'arch'
+      assign img_radius = '999px 999px 0 0'
+    when 'rounded'
+      assign img_radius = '999px'
+    else
+      assign img_radius = s.image_radius | append: 'px'
+  endcase
+
+  case s.section_height
+    when 'auto'
+      assign min_h = ''
+    else
+      assign min_h = s.section_height
+  endcase
+
+  if s.button_direction == 'right'
+    assign btn_dir = 'reverse'
+  else
+    assign btn_dir = 'normal'
+  endif
+
+  comment
+    Richtext outputs block-level <p> tags; convert them to spans so
+    both segments and the inline image flow as a single sentence.
+  endcomment
+  assign before_html = s.text_before | replace: '<p>', '<span class="ah-p">' | replace: '</p>', '</span> '
+  assign after_html = s.text_after | replace: '<p>', '<span class="ah-p">' | replace: '</p>', '</span> '
+  assign before_plain = s.text_before | strip_html
+  assign after_plain = s.text_after | strip_html
+  assign plain_label = before_plain | append: ' ' | append: after_plain | strip
+-%}
+
+{% style %}
+  /* ---- Per-instance design tokens (every setting becomes a custom
+         property on the section root) ---- */
+  #AboutHero-{{ sid }} {
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --ah-bg: {{ s.color_bg }};
+    --ah-ink: {{ s.color_text }};
+    --ah-muted: {{ s.color_label }};
+    --ah-btn-ink: {{ s.button_color }};
+    --ah-size-min: {{ s.size_min }}px;
+    --ah-size-max: {{ s.size_max }}px;
+    --ah-size-fluid: {{ s.size_vw }}vw;
+    --ah-lh: {{ s.line_height }};
+    --ah-maxw: {{ s.statement_max }}ch;
+    --ah-img-scale: {{ s.image_scale }};
+    --ah-img-radius: {{ img_radius }};
+    --ah-btn-speed: {{ s.button_speed }}s;
+    --ah-btn-dir: {{ btn_dir }};
+    --ah-parallax: {{ s.parallax_strength }};
+
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    {% if min_h != '' %}
+    min-height: {{ min_h }}vh;
+    min-height: {{ min_h }}svh;
+    {% endif %}
+    padding-top: {{ s.pad_top }}px;
+    padding-bottom: {{ s.pad_bottom }}px;
+    background-color: var(--ah-bg);
+    color: var(--ah-ink);
+  }
+
+  /* ---- Statement ---- */
+  #AboutHero-{{ sid }} .ah-inner {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 20px;
+    text-align: center;
+    /* Scroll parallax: drifts down relative to the document so the
+       statement appears to rise slightly slower than the page */
+    transform: translate3d(0, var(--ah-drift, 0px), 0);
+  }
+
+  #AboutHero-{{ sid }} .ah-label {
+    display: block;
+    margin: 0 0 30px;
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--ah-muted);
+  }
+
+  #AboutHero-{{ sid }} .ah-statement {
+    margin: 0 auto;
+    max-width: var(--ah-maxw);
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: clamp(var(--ah-size-min), var(--ah-size-fluid), var(--ah-size-max));
+    line-height: var(--ah-lh);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    color: var(--ah-ink);
+  }
+
+  /* ---- Inline image within the sentence ---- */
+  #AboutHero-{{ sid }} .ah-media {
+    display: inline-block;
+    vertical-align: middle;
+    height: calc(1em * var(--ah-lh) * var(--ah-img-scale));
+    aspect-ratio: var(--ah-img-ar, 0.78);
+    margin: 0 0.18em;
+    border-radius: var(--ah-img-radius);
+    overflow: hidden;
+  }
+  #AboutHero-{{ sid }} .ah-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Empty placeholder keeps the composition when no image is set yet */
+  #AboutHero-{{ sid }} .ah-media--ph {
+    background-color: color-mix(in srgb, var(--ah-ink) 9%, transparent);
+  }
+
+  /* ---- Marquee button (shared pattern: static centered label; on
+         hover/focus a duplicated track loops seamlessly) ---- */
+  #AboutHero-{{ sid }} .ah-btnrow {
+    margin-top: 44px;
+  }
+  #AboutHero-{{ sid }} .ah-btn {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    padding: 15px 36px;
+    border: 1px solid var(--ah-btn-ink);
+    border-radius: 999px;
+    background: transparent;
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--ah-btn-ink);
+  }
+  #AboutHero-{{ sid }} .ah-btn:focus-visible {
+    outline: 1px solid var(--ah-btn-ink);
+    outline-offset: 3px;
+  }
+  #AboutHero-{{ sid }} .ah-btn__static {
+    display: block;
+    white-space: nowrap;
+    transition: opacity 400ms var(--ease);
+  }
+  #AboutHero-{{ sid }} .ah-btn__track {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    display: flex;
+    gap: 2.5em;
+    width: max-content;
+    opacity: 0;
+    transform: translate(0, -50%);
+    white-space: nowrap;
+    animation: ah-btn-marquee var(--ah-btn-speed) linear infinite;
+    animation-play-state: paused;
+    animation-direction: var(--ah-btn-dir);
+    transition: opacity 400ms var(--ease);
+    pointer-events: none;
+  }
+  /* Track only takes over once JS has built the seamless loop */
+  #AboutHero-{{ sid }} .ah-btn[data-ready]:hover .ah-btn__static,
+  #AboutHero-{{ sid }} .ah-btn[data-ready]:focus-visible .ah-btn__static {
+    opacity: 0;
+  }
+  #AboutHero-{{ sid }} .ah-btn[data-ready]:hover .ah-btn__track,
+  #AboutHero-{{ sid }} .ah-btn[data-ready]:focus-visible .ah-btn__track {
+    opacity: 1;
+    animation-play-state: running;
+  }
+  @keyframes ah-btn-marquee {
+    from { transform: translate(0, -50%); }
+    to { transform: translate(calc(-1 * var(--marquee-loop, 200px)), -50%); }
+  }
+
+  /* ---- Scroll cue ---- */
+  #AboutHero-{{ sid }} .ah-cue {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    z-index: 2;
+    /* Base transform keeps the cue centered when the bounce animation
+       is disabled (reduced motion) */
+    transform: translateX(-50%);
+    color: var(--ah-muted);
+    animation: ah-cue-bounce 2.8s var(--ease) infinite;
+  }
+  #AboutHero-{{ sid }} .ah-cue__text {
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  #AboutHero-{{ sid }} .ah-cue__arrow {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    transform: rotate(45deg);
+  }
+  @keyframes ah-cue-bounce {
+    0%, 100% { transform: translate(-50%, 0); }
+    50% { transform: translate(-50%, 7px); }
+  }
+
+  /* ---- Decorative illustration blocks ---- */
+  #AboutHero-{{ sid }} .ah-illo {
+    position: absolute;
+    z-index: 0;
+    width: var(--illo-size);
+    opacity: var(--illo-o);
+    pointer-events: none;
+    /* Base transform carries the per-block parallax drift; the float
+       keyframes below re-compose it so the two effects stack */
+    transform: translate3d(0, var(--ah-illo-par, 0px), 0);
+  }
+  #AboutHero-{{ sid }} .ah-illo--above { z-index: 2; }
+  #AboutHero-{{ sid }} .ah-illo img {
+    width: 100%;
+    height: auto;
+    transform: rotate(var(--illo-rot));
+  }
+  /* Anchors: offsets are folded into the inset so positive X always
+     moves right and positive Y always moves down */
+  #AboutHero-{{ sid }} .ah-illo--top-left { top: calc(5% + var(--illo-y)); left: calc(5% + var(--illo-x)); }
+  #AboutHero-{{ sid }} .ah-illo--top-right { top: calc(5% + var(--illo-y)); right: calc(5% - var(--illo-x)); }
+  #AboutHero-{{ sid }} .ah-illo--beside-heading { top: calc(16% + var(--illo-y)); right: calc(14% - var(--illo-x)); }
+  #AboutHero-{{ sid }} .ah-illo--left-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); left: calc(3% + var(--illo-x)); }
+  #AboutHero-{{ sid }} .ah-illo--right-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); right: calc(3% - var(--illo-x)); }
+  #AboutHero-{{ sid }} .ah-illo--bottom-left { bottom: calc(5% - var(--illo-y)); left: calc(5% + var(--illo-x)); }
+  #AboutHero-{{ sid }} .ah-illo--bottom-right { bottom: calc(5% - var(--illo-y)); right: calc(5% - var(--illo-x)); }
+
+  #AboutHero-{{ sid }}[data-animate='true'] .ah-illo--float {
+    animation: ah-illo-float var(--illo-float, 8s) ease-in-out infinite;
+  }
+  @keyframes ah-illo-float {
+    0%, 100% { transform: translate3d(0, var(--ah-illo-par, 0px), 0); }
+    50% { transform: translate3d(0, calc(var(--ah-illo-par, 0px) - 12px), 0); }
+  }
+
+  /* ---- Load animation states (applied by JS only, pre-paint, so a
+         no-JS visit renders everything in its final state) ---- */
+  #AboutHero-{{ sid }} .ah-w { display: inline-block; }
+  #AboutHero-{{ sid }}.ah-pre .ah-w {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  #AboutHero-{{ sid }}.ah-pre .ah-media { clip-path: inset(100% 0 0 0); }
+  #AboutHero-{{ sid }}.ah-pre .ah-label,
+  #AboutHero-{{ sid }}.ah-pre .ah-btnrow,
+  #AboutHero-{{ sid }}.ah-pre .ah-cue { opacity: 0; }
+
+  #AboutHero-{{ sid }}.ah-play .ah-w {
+    opacity: 1;
+    transform: none;
+    transition: opacity 600ms var(--ease), transform 600ms var(--ease);
+    transition-delay: calc(var(--wi, 0) * var(--ah-stagger, 30ms));
+  }
+  #AboutHero-{{ sid }}.ah-play .ah-media {
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 700ms var(--ease);
+    transition-delay: var(--ah-media-delay, 500ms);
+  }
+  #AboutHero-{{ sid }}.ah-play .ah-label {
+    opacity: 1;
+    transition: opacity 600ms var(--ease);
+  }
+  #AboutHero-{{ sid }}.ah-play .ah-btnrow,
+  #AboutHero-{{ sid }}.ah-play .ah-cue {
+    opacity: 1;
+    transition: opacity 700ms var(--ease);
+    transition-delay: calc(var(--ah-media-delay, 500ms) + 300ms);
+  }
+  /* The cue's bounce uses the same opacity, so re-declare with the
+     animation shorthand intact */
+  #AboutHero-{{ sid }}.ah-play .ah-cue { animation-delay: 1.4s; }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 749px) {
+    #AboutHero-{{ sid }} {
+      padding-top: {{ s.pad_top_m }}px;
+      padding-bottom: {{ s.pad_bottom_m }}px;
+    }
+    #AboutHero-{{ sid }} .ah-illo { display: none; }
+    #AboutHero-{{ sid }} .ah-illo--m { display: block; }
+    #AboutHero-{{ sid }} .ah-cue--hide-m { display: none; }
+    {% if s.stack_mobile %}
+    #AboutHero-{{ sid }} .ah-media {
+      display: block;
+      width: min(62%, 280px);
+      height: auto;
+      margin: 0.45em auto;
+    }
+    {% endif %}
+  }
+
+  /* ---- Reduced motion: no load sweep, no parallax, no float, no
+         bounce, no marquee — final state renders immediately ---- */
+  @media (prefers-reduced-motion: reduce) {
+    #AboutHero-{{ sid }} .ah-inner { transform: none; }
+    #AboutHero-{{ sid }} .ah-illo,
+    #AboutHero-{{ sid }} .ah-cue { animation: none !important; }
+    #AboutHero-{{ sid }} .ah-illo { transform: none; }
+    #AboutHero-{{ sid }} .ah-btn__track { display: none; }
+    #AboutHero-{{ sid }} .ah-btn[data-ready]:hover .ah-btn__static,
+    #AboutHero-{{ sid }} .ah-btn[data-ready]:focus-visible .ah-btn__static { opacity: 1; }
+    #AboutHero-{{ sid }}.ah-pre .ah-w,
+    #AboutHero-{{ sid }}.ah-pre .ah-label,
+    #AboutHero-{{ sid }}.ah-pre .ah-btnrow,
+    #AboutHero-{{ sid }}.ah-pre .ah-cue { opacity: 1; transform: none; }
+    #AboutHero-{{ sid }}.ah-pre .ah-media { clip-path: none; }
+  }
+{% endstyle %}
+
+<div
+  id="AboutHero-{{ sid }}"
+  data-about-hero
+  data-animate="{{ s.enable_animations }}"
+  data-load-anim="{{ s.load_animation }}"
+  data-parallax="{{ s.parallax_strength }}"
+>
+  {%- comment -%} Decorative illustrations: absolute, behind content by default {%- endcomment -%}
+  {%- for block in section.blocks -%}
+    {%- if block.type == 'illustration' and block.settings.image != blank -%}
+      <div
+        class="ah-illo ah-illo--{{ block.settings.position }}{% if block.settings.show_mobile %} ah-illo--m{% endif %}{% if block.settings.float %} ah-illo--float{% endif %}{% if block.settings.above %} ah-illo--above{% endif %}"
+        style="--illo-size: {{ block.settings.size }}px; --illo-x: {{ block.settings.offset_x }}px; --illo-y: {{ block.settings.offset_y }}px; --illo-rot: {{ block.settings.rotation }}deg; --illo-o: {{ block.settings.opacity | divided_by: 100.0 }}; --illo-float: {{ block.settings.float_speed }}s;"
+        data-illo
+        data-illo-parallax="{{ block.settings.parallax }}"
+        aria-hidden="true"
+        {{ block.shopify_attributes }}
+      >
+        {{ block.settings.image | image_url: width: 560 | image_tag: loading: 'lazy', alt: '', widths: '280, 560', sizes: '280px' }}
+      </div>
+    {%- endif -%}
+  {%- endfor -%}
+
+  <div class="ah-inner" data-inner>
+    {%- if s.show_label and s.label_text != blank -%}
+      <span class="ah-label">{{ s.label_text | escape }}</span>
+    {%- endif -%}
+
+    {%- if s.text_before != blank or s.text_after != blank -%}
+      <{{ s.heading_tag }} class="ah-statement" aria-label="{{ plain_label | escape }}">
+        <span aria-hidden="true" data-flow>
+          {%- if s.text_before != blank -%}
+            <span class="ah-seg" data-split>{{ before_html }}</span>
+          {%- endif -%}
+          {%- if s.image != blank -%}
+            <span class="ah-media" style="--ah-img-ar: {{ s.image.aspect_ratio }}" data-media>
+              {{- s.image | image_url: width: 900 | image_tag: loading: 'eager', alt: '', widths: '450, 900', sizes: '300px' -}}
+            </span>
+          {%- else -%}
+            <span class="ah-media ah-media--ph" data-media></span>
+          {%- endif -%}
+          {%- if s.text_after != blank -%}
+            <span class="ah-seg" data-split>{{ after_html }}</span>
+          {%- endif -%}
+        </span>
+      </{{ s.heading_tag }}>
+    {%- endif -%}
+
+    {%- if s.show_button and s.button_label != blank -%}
+      <div class="ah-btnrow">
+        <a class="ah-btn" href="{{ s.button_link | default: '#' }}" data-marquee>
+          <span class="ah-btn__static">{{ s.button_label | escape }}</span>
+          <span class="ah-btn__track" aria-hidden="true" data-marquee-track>
+            <span data-marquee-copy>{{ s.button_label | escape }}</span>
+          </span>
+        </a>
+      </div>
+    {%- endif -%}
+  </div>
+
+  {%- if s.show_cue -%}
+    <div class="ah-cue{% unless s.cue_mobile %} ah-cue--hide-m{% endunless %}" aria-hidden="true">
+      {%- if s.cue_style == 'text' -%}
+        <span class="ah-cue__text">{{ s.cue_text | escape }}</span>
+      {%- else -%}
+        <span class="ah-cue__arrow"></span>
+      {%- endif -%}
+    </div>
+  {%- endif -%}
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    /* Wrap each word in a positioned span (preserving <em>/<strong>),
+       skipping whitespace so no empty spans are ever produced.
+       Returns the running word index for cross-segment stagger. */
+    function splitWords(container, startIndex) {
+      var idx = startIndex;
+      function walk(node) {
+        var child = node.firstChild;
+        while (child) {
+          var next = child.nextSibling;
+          if (child.nodeType === 3) {
+            if (child.nodeValue.trim() !== '') {
+              var frag = document.createDocumentFragment();
+              var parts = child.nodeValue.split(/(\s+)/);
+              for (var i = 0; i < parts.length; i++) {
+                if (parts[i] === '') continue;
+                if (/^\s+$/.test(parts[i])) {
+                  frag.appendChild(document.createTextNode(parts[i]));
+                } else {
+                  var w = document.createElement('span');
+                  w.className = 'ah-w';
+                  w.style.setProperty('--wi', idx++);
+                  w.textContent = parts[i];
+                  frag.appendChild(w);
+                }
+              }
+              node.replaceChild(frag, child);
+            }
+          } else if (child.nodeType === 1) {
+            walk(child);
+          }
+          child = next;
+        }
+      }
+      walk(container);
+      return idx;
+    }
+
+    /* Shared marquee-button builder: measures one label copy, appends
+       enough clones to cover the pill plus one loop unit, and exposes
+       the loop distance so any label length loops invisibly. */
+    function buildMarquee(btn) {
+      if (!btn) return null;
+      var track = btn.querySelector('[data-marquee-track]');
+      var copy = btn.querySelector('[data-marquee-copy]');
+      if (!track || !copy) return null;
+      function build() {
+        var clones = track.querySelectorAll('[data-clone]');
+        for (var i = 0; i < clones.length; i++) track.removeChild(clones[i]);
+        var gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+        var unit = copy.getBoundingClientRect().width + gap;
+        if (unit <= gap) return;
+        var needed = Math.ceil((btn.clientWidth + unit) / unit) + 1;
+        for (var j = 0; j < needed; j++) {
+          var c = copy.cloneNode(true);
+          c.setAttribute('data-clone', '');
+          track.appendChild(c);
+        }
+        btn.style.setProperty('--marquee-loop', unit + 'px');
+        btn.setAttribute('data-ready', '');
+      }
+      build();
+      return build;
+    }
+
+    function initAboutHero(root) {
+      if (!root || root.dataset.init === 'true') return;
+      root.dataset.init = 'true';
+
+      var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
+      var animOn = root.dataset.animate === 'true';
+      var inner = root.querySelector('[data-inner]');
+      var segs = root.querySelectorAll('[data-split]');
+      var illos = Array.prototype.slice.call(root.querySelectorAll('[data-illo]'));
+
+      /* ---- Load animation (one-shot). Runs pre-paint: this script is
+         parser-blocking directly after the markup, so the hidden state
+         never flashes visible first. ---- */
+      if (animOn && root.dataset.loadAnim === 'true' && !prm.matches && segs.length) {
+        var count = 0;
+        for (var i = 0; i < segs.length; i++) count = splitWords(segs[i], count);
+        if (count > 0) {
+          /* Stagger shrinks with word count so the sweep stays < 1.2s */
+          var stagger = Math.min(32, Math.max(12, Math.round(820 / count)));
+          root.style.setProperty('--ah-stagger', stagger + 'ms');
+          root.style.setProperty('--ah-media-delay', Math.min(900, count * stagger + 220) + 'ms');
+          root.classList.add('ah-pre');
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              root.classList.add('ah-play');
+            });
+          });
+        }
+      }
+
+      /* ---- Marquee button ---- */
+      var rebuildMarquee = buildMarquee(root.querySelector('[data-marquee]'));
+
+      /* ---- Scroll parallax (linked + reversible). Measurements are
+         cached outside the frame loop; the loop reads scrollY only. ---- */
+      var kStatement = (parseFloat(root.dataset.parallax) || 0) / 100 * 0.35;
+      var illoData = illos.map(function (el) {
+        return { el: el, k: (parseFloat(el.dataset.illoParallax) || 0) / 100 * 0.45 };
+      });
+      var hasParallax = animOn && (kStatement > 0 || illoData.some(function (d) { return d.k > 0; }));
+      var vh = 1;
+      var secTop = 0;
+      var secH = 0;
+      var ticking = false;
+
+      function measure() {
+        vh = window.innerHeight || 1;
+        secTop = root.getBoundingClientRect().top + window.scrollY;
+        secH = root.offsetHeight;
+      }
+
+      function frame() {
+        ticking = false;
+        var sc = window.scrollY - secTop;
+        if (sc < 0) sc = 0;
+        var max = secH * 1.5;
+        if (sc > max) sc = max;
+        if (inner) inner.style.setProperty('--ah-drift', (sc * kStatement).toFixed(1) + 'px');
+        for (var i = 0; i < illoData.length; i++) {
+          if (illoData[i].k > 0) {
+            illoData[i].el.style.setProperty('--ah-illo-par', (-sc * illoData[i].k).toFixed(1) + 'px');
+          }
+        }
+      }
+
+      function onScroll() {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(frame);
+        }
+      }
+
+      var resizeTimer = null;
+      function onResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+          measure();
+          if (rebuildMarquee) rebuildMarquee();
+          onScroll();
+        }, 150);
+      }
+
+      function stopParallax() {
+        window.removeEventListener('scroll', onScroll);
+        if (inner) inner.style.removeProperty('--ah-drift');
+        illoData.forEach(function (d) { d.el.style.removeProperty('--ah-illo-par'); });
+      }
+
+      if (hasParallax && !prm.matches) {
+        measure();
+        frame();
+        window.addEventListener('scroll', onScroll, { passive: true });
+      }
+      window.addEventListener('resize', onResize);
+      window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+
+      function onMotionChange() {
+        if (prm.matches) {
+          stopParallax();
+          root.classList.remove('ah-pre', 'ah-play');
+        }
+      }
+      if (prm.addEventListener) prm.addEventListener('change', onMotionChange);
+
+      root.__teardown = function () {
+        stopParallax();
+        window.removeEventListener('resize', onResize);
+        if (prm.removeEventListener) prm.removeEventListener('change', onMotionChange);
+      };
+    }
+
+    /* Theme-editor lifecycle: one delegated listener per section type;
+       each instance initializes itself by id, so instances never clash */
+    if (!window.__aboutHeroReady) {
+      window.__aboutHeroReady = true;
+      document.addEventListener('shopify:section:load', function (event) {
+        var el = event.target.querySelector('[data-about-hero]');
+        if (el) initAboutHero(el);
+      });
+      document.addEventListener('shopify:section:unload', function (event) {
+        var el = event.target.querySelector('[data-about-hero]');
+        if (el && el.__teardown) el.__teardown();
+      });
+    }
+    initAboutHero(document.getElementById('AboutHero-{{ sid }}'));
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "About hero",
+  "tag": "section",
+  "class": "section-about-hero",
+  "max_blocks": 4,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_label",
+      "label": "Show micro-label",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "label_text",
+      "label": "Micro-label",
+      "default": "OUR STORY"
+    },
+    {
+      "type": "richtext",
+      "id": "text_before",
+      "label": "Text before image",
+      "default": "<p>We make quiet, essential things for</p>"
+    },
+    {
+      "type": "richtext",
+      "id": "text_after",
+      "label": "Text after image",
+      "default": "<p>the small rituals of home.</p>"
+    },
+    {
+      "type": "header",
+      "content": "Inline image"
+    },
+    {
+      "type": "image_picker",
+      "id": "image",
+      "label": "Image",
+      "info": "Sits inside the sentence. A soft placeholder shows until an image is chosen."
+    },
+    {
+      "type": "range",
+      "id": "image_scale",
+      "label": "Image height (× line height)",
+      "min": 0.8,
+      "max": 1.6,
+      "step": 0.05,
+      "default": 1.1
+    },
+    {
+      "type": "select",
+      "id": "image_shape",
+      "label": "Image shape",
+      "options": [
+        { "value": "rectangle", "label": "Rectangle" },
+        { "value": "rounded", "label": "Rounded (pill)" },
+        { "value": "arch", "label": "Arch" }
+      ],
+      "default": "arch"
+    },
+    {
+      "type": "range",
+      "id": "image_radius",
+      "label": "Corner radius (Rectangle shape)",
+      "min": 0,
+      "max": 48,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "checkbox",
+      "id": "stack_mobile",
+      "label": "Stack image on mobile",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "Typography"
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag",
+      "options": [
+        { "value": "h1", "label": "H1" },
+        { "value": "h2", "label": "H2" },
+        { "value": "h3", "label": "H3" }
+      ],
+      "default": "h1",
+      "info": "Only one H1 should exist per page."
+    },
+    {
+      "type": "range",
+      "id": "size_min",
+      "label": "Statement size — minimum",
+      "min": 28,
+      "max": 72,
+      "step": 2,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "size_max",
+      "label": "Statement size — maximum",
+      "min": 56,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 104
+    },
+    {
+      "type": "range",
+      "id": "size_vw",
+      "label": "Statement fluid scale",
+      "min": 4,
+      "max": 10,
+      "step": 0.5,
+      "unit": "vw",
+      "default": 7
+    },
+    {
+      "type": "range",
+      "id": "line_height",
+      "label": "Line height",
+      "min": 1,
+      "max": 1.4,
+      "step": 0.05,
+      "default": 1.15
+    },
+    {
+      "type": "range",
+      "id": "statement_max",
+      "label": "Statement max width",
+      "min": 16,
+      "max": 36,
+      "step": 1,
+      "unit": "ch",
+      "default": 24
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "color_bg",
+      "label": "Background",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color",
+      "id": "color_text",
+      "label": "Statement",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "color",
+      "id": "color_label",
+      "label": "Micro-label and scroll cue",
+      "default": "#8A7566"
+    },
+    {
+      "type": "header",
+      "content": "Scroll cue"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_cue",
+      "label": "Show scroll cue",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "cue_style",
+      "label": "Cue style",
+      "options": [
+        { "value": "arrow", "label": "Thin arrow" },
+        { "value": "text", "label": "Text" }
+      ],
+      "default": "arrow"
+    },
+    {
+      "type": "text",
+      "id": "cue_text",
+      "label": "Cue text",
+      "default": "SCROLL"
+    },
+    {
+      "type": "checkbox",
+      "id": "cue_mobile",
+      "label": "Show cue on mobile",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show button",
+      "default": false,
+      "info": "Default off — the statement should breathe."
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "DISCOVER MORE"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link"
+    },
+    {
+      "type": "select",
+      "id": "button_direction",
+      "label": "Button marquee direction",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "button_speed",
+      "label": "Button marquee speed",
+      "min": 2,
+      "max": 12,
+      "step": 0.5,
+      "unit": "s",
+      "default": 6
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button border and text",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "header",
+      "content": "Animation"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_animations",
+      "label": "Enable animations",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "load_animation",
+      "label": "Play load animation",
+      "default": true,
+      "info": "Words sweep in, then the image reveals. One-shot on first paint."
+    },
+    {
+      "type": "range",
+      "id": "parallax_strength",
+      "label": "Statement parallax strength",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "default": 30
+    },
+    {
+      "type": "header",
+      "content": "Layout and spacing"
+    },
+    {
+      "type": "select",
+      "id": "section_height",
+      "label": "Section height",
+      "options": [
+        { "value": "100", "label": "100% of viewport" },
+        { "value": "90", "label": "90% of viewport" },
+        { "value": "80", "label": "80% of viewport" },
+        { "value": "auto", "label": "Auto" }
+      ],
+      "default": "100"
+    },
+    {
+      "type": "range",
+      "id": "pad_top",
+      "label": "Top padding — desktop",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom",
+      "label": "Bottom padding — desktop",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    },
+    {
+      "type": "range",
+      "id": "pad_top_m",
+      "label": "Top padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom_m",
+      "label": "Bottom padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 48
+    }
+  ],
+  "blocks": [
+    {
+      "type": "illustration",
+      "name": "Illustration",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image",
+          "info": "Transparent PNG brand element. Decorative only."
+        },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "options": [
+            { "value": "top-left", "label": "Top left" },
+            { "value": "top-right", "label": "Top right" },
+            { "value": "beside-heading", "label": "Beside heading" },
+            { "value": "left-center", "label": "Left of content" },
+            { "value": "right-center", "label": "Right of content" },
+            { "value": "bottom-left", "label": "Bottom left" },
+            { "value": "bottom-right", "label": "Bottom right" }
+          ],
+          "default": "top-right"
+        },
+        {
+          "type": "range",
+          "id": "offset_x",
+          "label": "Offset X",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "offset_y",
+          "label": "Offset Y",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "size",
+          "label": "Size",
+          "min": 40,
+          "max": 280,
+          "step": 4,
+          "unit": "px",
+          "default": 120
+        },
+        {
+          "type": "range",
+          "id": "rotation",
+          "label": "Rotation",
+          "min": -30,
+          "max": 30,
+          "step": 1,
+          "unit": "deg",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "opacity",
+          "label": "Opacity",
+          "min": 10,
+          "max": 100,
+          "step": 5,
+          "unit": "%",
+          "default": 100
+        },
+        {
+          "type": "checkbox",
+          "id": "show_mobile",
+          "label": "Show on mobile",
+          "default": false
+        },
+        {
+          "type": "checkbox",
+          "id": "float",
+          "label": "Slow float animation",
+          "default": false
+        },
+        {
+          "type": "range",
+          "id": "float_speed",
+          "label": "Float duration",
+          "min": 6,
+          "max": 10,
+          "step": 0.5,
+          "unit": "s",
+          "default": 8
+        },
+        {
+          "type": "checkbox",
+          "id": "above",
+          "label": "Place above content",
+          "default": false
+        },
+        {
+          "type": "range",
+          "id": "parallax",
+          "label": "Parallax strength",
+          "min": 0,
+          "max": 100,
+          "step": 5,
+          "default": 20
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "About hero"
+    }
+  ]
+}
+{% endschema %}

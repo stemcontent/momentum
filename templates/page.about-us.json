@@ -1,0 +1,212 @@
+{
+  "sections": {
+    "about_hero": {
+      "type": "about-hero",
+      "settings": {
+        "show_label": true,
+        "label_text": "OUR STORY",
+        "text_before": "<p>We make quiet, essential things for</p>",
+        "text_after": "<p>the small rituals of home.</p>",
+        "image_scale": 1.1,
+        "image_shape": "arch",
+        "heading_tag": "h1",
+        "color_bg": "#FAF3E7",
+        "color_text": "#2B1A12",
+        "color_label": "#8A7566",
+        "show_cue": true,
+        "cue_style": "arrow",
+        "show_button": false,
+        "enable_animations": true,
+        "load_animation": true,
+        "parallax_strength": 30,
+        "section_height": "100"
+      }
+    },
+    "word_ribbon": {
+      "type": "word-ribbon",
+      "blocks": {
+        "word_playful": {
+          "type": "word",
+          "settings": { "text": "Playful" }
+        },
+        "word_essential": {
+          "type": "word",
+          "settings": { "text": "Essential" }
+        },
+        "word_intimate": {
+          "type": "word",
+          "settings": { "text": "Intimate" }
+        }
+      },
+      "block_order": ["word_playful", "word_essential", "word_intimate"],
+      "settings": {
+        "separator": "·",
+        "enable_animations": true,
+        "direction": "left",
+        "speed": 20,
+        "velocity_coupling": true,
+        "style": "serif",
+        "color_text": "#2B1A12",
+        "bg_transparent": true,
+        "hairline_top": true,
+        "hairline_bottom": true,
+        "color_hairline": "#E3D7C3"
+      }
+    },
+    "mission_cards": {
+      "type": "mission-cards",
+      "blocks": {
+        "card_materials": {
+          "type": "card",
+          "settings": {
+            "title": "Material honesty",
+            "body": "<p>We start with what a thing is made of. If a material cannot age gracefully, it does not get through the door.</p>"
+          }
+        },
+        "card_keep": {
+          "type": "card",
+          "settings": {
+            "title": "Made to keep",
+            "body": "<p>Trends have a shelf life. Our pieces are drawn slowly, tested in real homes, and meant to be handed down.</p>"
+          }
+        },
+        "card_useful": {
+          "type": "card",
+          "settings": {
+            "title": "Quietly useful",
+            "body": "<p>The best objects do not ask for attention. They simply make the everyday feel a little more considered.</p>"
+          }
+        }
+      },
+      "block_order": ["card_materials", "card_keep", "card_useful"],
+      "settings": {
+        "show_label": true,
+        "label_text": "OUR MISSION",
+        "heading": "Why we make things",
+        "align": "left",
+        "show_numbers": true,
+        "columns": 3,
+        "offset": 30,
+        "heading_tag": "h2",
+        "color_bg": "#FAF3E7",
+        "color_heading": "#2B1A12",
+        "color_label": "#8A7566",
+        "color_hairline": "#E3D7C3",
+        "enable_animations": true
+      }
+    },
+    "vision_band": {
+      "type": "vision-band",
+      "blocks": {
+        "row_fewer": {
+          "type": "row",
+          "settings": {
+            "label": "01",
+            "title": "Fewer, better things",
+            "body": "<p>We would rather perfect one object than launch ten. Our catalogue grows by subtraction as much as by addition.</p>"
+          }
+        },
+        "row_craft": {
+          "type": "row",
+          "settings": {
+            "label": "02",
+            "title": "Craft that lasts",
+            "body": "<p>We are building long relationships with small workshops, so the hands that make our pieces are the same hands year after year.</p>"
+          }
+        },
+        "row_calm": {
+          "type": "row",
+          "settings": {
+            "label": "03",
+            "title": "A calmer home",
+            "body": "<p>Everything we design should lower the volume of a room. That is the measure we hold every new idea against.</p>"
+          }
+        }
+      },
+      "block_order": ["row_fewer", "row_craft", "row_calm"],
+      "settings": {
+        "show_label": true,
+        "label_text": "OUR VISION",
+        "heading": "Where this is going",
+        "align": "left",
+        "row_grid": "balanced",
+        "edge_style": "straight",
+        "heading_tag": "h2",
+        "color_bg": "#2B1A12",
+        "color_heading": "#FAF3E7",
+        "color_label": "#A8927D",
+        "color_title": "#FAF3E7",
+        "color_body": "#FAF3E7",
+        "color_muted_word": "#6F5B49",
+        "color_hairline": "#54453D",
+        "show_button": false,
+        "button_color": "#FAF3E7",
+        "enable_animations": true,
+        "enable_sweep": true
+      }
+    },
+    "faq": {
+      "type": "faq-accordion",
+      "blocks": {
+        "q_made": {
+          "type": "question",
+          "settings": {
+            "question": "Where are your pieces made?",
+            "answer": "<p>In small family-run workshops we visit often. Each product page names its workshop and region.</p>"
+          }
+        },
+        "q_materials": {
+          "type": "question",
+          "settings": {
+            "question": "What materials do you use?",
+            "answer": "<p>Natural, honest ones — solid wood, stoneware, linen and full-grain leather — chosen to age beautifully rather than simply arrive new.</p>"
+          }
+        },
+        "q_care": {
+          "type": "question",
+          "settings": {
+            "question": "How do I care for my pieces?",
+            "answer": "<p>Gently and rarely. Each order includes a short care card, and the same guidance lives on every product page.</p>"
+          }
+        },
+        "q_shipping": {
+          "type": "question",
+          "settings": {
+            "question": "What is your shipping and returns policy?",
+            "answer": "<p>We ship worldwide in plastic-free packaging. If a piece is not right, you have 30 days to return it in its original condition.</p>"
+          }
+        },
+        "q_wholesale": {
+          "type": "question",
+          "settings": {
+            "question": "Do you work with stores or designers?",
+            "answer": "<p>We do, selectively. Write to us through the contact page and tell us about your space — we read everything ourselves.</p>"
+          }
+        }
+      },
+      "block_order": ["q_made", "q_materials", "q_care", "q_shipping", "q_wholesale"],
+      "settings": {
+        "heading": "Questions, answered",
+        "align": "left",
+        "allow_multiple": false,
+        "first_open": false,
+        "icon_style": "plus",
+        "heading_tag": "h2",
+        "color_bg": "#FAF3E7",
+        "color_heading": "#2B1A12",
+        "color_question": "#2B1A12",
+        "color_answer": "#5C4A3D",
+        "color_icon": "#2B1A12",
+        "color_hairline": "#E3D7C3",
+        "enable_animations": true,
+        "seo_jsonld": true,
+        "closing_line": "Still curious? We answer every note ourselves.",
+        "show_button": true,
+        "button_label": "CONTACT US",
+        "button_link": "/pages/contact",
+        "button_color": "#2B1A12"
+      }
+    }
+  },
+  "order": ["about_hero", "word_ribbon", "mission_cards", "vision_band", "faq"]
+}

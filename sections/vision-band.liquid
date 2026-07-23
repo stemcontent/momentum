@@ -1,0 +1,1169 @@
+{% comment %}
+  ------------------------------------------------------------------
+  Vision Band — inverted dark band, the page's dramatic beat
+  ------------------------------------------------------------------
+  Full-width dark espresso band, light text, full-width hairline-
+  divided rows (label / title / body / optional small image).
+
+  Two scroll layers, both linked and reversible:
+    1. Row entrance: hairline draws left-to-right, then label, title
+       and body rise ~24px and fade with a small internal stagger.
+    2. Word sweep (signature): body text is split into word spans in
+       JS (once, cached; <em>/<strong> preserved; no empty spans) and
+       each word's color sweeps from a muted brown-cream mix to full
+       cream as the row travels between the sweep start/end viewport
+       offsets. An untouched visually-hidden copy of the original
+       richtext keeps the text accessible; the split copy is
+       aria-hidden.
+
+  Progress lives in CSS custom properties defaulting to the final
+  state, so a no-JS visit renders full-color, fully visible text.
+  Scoped by section id; multiple instances safe; re-initializes on
+  shopify:section:load. One passive scroll listener, rAF-throttled,
+  measurements cached outside the frame loop.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  case s.row_grid
+    when 'narrow'
+      assign row_cols = '1.5fr 3.5fr 7fr'
+    when 'title-wide'
+      assign row_cols = '2fr 5fr 5fr'
+    else
+      assign row_cols = '2fr 4fr 6fr'
+  endcase
+
+  case s.edge_style
+    when 'top'
+      assign band_radius = s.edge_radius | append: 'px ' | append: s.edge_radius | append: 'px 0 0'
+    when 'both'
+      assign band_radius = s.edge_radius | append: 'px'
+    else
+      assign band_radius = '0'
+  endcase
+
+  if s.button_direction == 'right'
+    assign btn_dir = 'reverse'
+  else
+    assign btn_dir = 'normal'
+  endif
+-%}
+
+{% style %}
+  /* ---- Per-instance design tokens ---- */
+  #VisionBand-{{ sid }} {
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --vb-bg: {{ s.color_bg }};
+    --vb-ink: {{ s.color_heading }};
+    --vb-muted: {{ s.color_label }};
+    --vb-title: {{ s.color_title }};
+    --vb-body: {{ s.color_body }};
+    --vb-mutedw: {{ s.color_muted_word }};
+    --vb-hairline: {{ s.color_hairline }};
+    --vb-btn-ink: {{ s.button_color }};
+    --vb-cols: {{ row_cols }};
+    --vb-heading-size: clamp({{ s.heading_size_m }}px, 4vw, {{ s.heading_size }}px);
+    --vb-title-size: clamp({{ s.title_size | times: 0.85 | round }}px, 2vw, {{ s.title_size }}px);
+    --vb-body-size: {{ s.body_size }}px;
+    --vb-media-w: {{ s.image_width }}px;
+    --vb-btn-speed: {{ s.button_speed }}s;
+    --vb-btn-dir: {{ btn_dir }};
+
+    position: relative;
+    overflow: hidden;
+    background-color: var(--vb-bg);
+    color: var(--vb-body);
+    border-radius: {{ band_radius }};
+    padding-top: {{ s.pad_top }}px;
+    padding-bottom: {{ s.pad_bottom }}px;
+  }
+
+  #VisionBand-{{ sid }} .vb-container {
+    position: relative;
+    z-index: 1;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ---- Header (same structure as Mission) ---- */
+  #VisionBand-{{ sid }} .vb-header {
+    margin-bottom: 72px;
+    text-align: {{ s.align }};
+  }
+  #VisionBand-{{ sid }} .vb-label {
+    display: block;
+    margin: 0 0 20px;
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--vb-muted);
+  }
+  #VisionBand-{{ sid }} .vb-heading {
+    margin: 0;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: var(--vb-heading-size);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    color: var(--vb-ink);
+  }
+  #VisionBand-{{ sid }} .vb-intro {
+    max-width: 58ch;
+    margin: 20px 0 0;
+    font-size: calc(var(--vb-body-size) + 1px);
+    line-height: 1.7;
+    color: {{ s.color_intro }};
+  }
+  #VisionBand-{{ sid }} .vb-intro p { margin: 0 0 0.6em; }
+  #VisionBand-{{ sid }} .vb-intro p:last-child { margin-bottom: 0; }
+  {% if s.align == 'center' %}
+  #VisionBand-{{ sid }} .vb-intro { margin-left: auto; margin-right: auto; }
+  {% endif %}
+
+  /* ---- Rows. Animation custom properties default to the final
+         state so a no-JS visit shows everything ---- */
+  #VisionBand-{{ sid }} .vb-row {
+    position: relative;
+    padding: 40px 0;
+  }
+  #VisionBand-{{ sid }} .vb-row__rule {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--vb-hairline);
+    transform: scaleX(var(--p-rule, 1));
+    transform-origin: left;
+  }
+  #VisionBand-{{ sid }} .vb-row:last-of-type::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--vb-hairline);
+  }
+  #VisionBand-{{ sid }} .vb-row__grid {
+    display: grid;
+    grid-template-columns: var(--vb-cols);
+    gap: 24px 40px;
+    align-items: start;
+  }
+  #VisionBand-{{ sid }} .vb-row__grid--media {
+    grid-template-columns: var(--vb-cols) var(--vb-media-w);
+  }
+  #VisionBand-{{ sid }} .vb-row__label {
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    color: {{ s.color_row_label }};
+    opacity: var(--p-a, 1);
+    transform: translateY(calc((1 - var(--p-a, 1)) * 24px));
+  }
+  #VisionBand-{{ sid }} .vb-row__title {
+    margin: 0;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: var(--vb-title-size);
+    line-height: 1.25;
+    color: var(--vb-title);
+    opacity: var(--p-b, 1);
+    transform: translateY(calc((1 - var(--p-b, 1)) * 24px));
+  }
+  #VisionBand-{{ sid }} .vb-row__body {
+    font-size: var(--vb-body-size);
+    line-height: 1.75;
+    color: var(--vb-body);
+    opacity: var(--p-c, 1);
+    transform: translateY(calc((1 - var(--p-c, 1)) * 24px));
+  }
+  #VisionBand-{{ sid }} .vb-row__body p { margin: 0 0 0.6em; }
+  #VisionBand-{{ sid }} .vb-row__body p:last-child { margin-bottom: 0; }
+  #VisionBand-{{ sid }} .vb-row__media {
+    justify-self: end;
+    width: var(--vb-media-w);
+    opacity: var(--p-c, 1);
+  }
+  #VisionBand-{{ sid }} .vb-row__media img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* ---- Word sweep: each word interpolates from the muted mix to
+         full body color as --sweep advances past its index ---- */
+  #VisionBand-{{ sid }} .vb-w {
+    --wp: clamp(0, calc(var(--sweep, 1) * (var(--wt, 1) + 2) - var(--wi, 0)), 1);
+    color: color-mix(in srgb, var(--vb-body) calc(var(--wp) * 100%), var(--vb-mutedw));
+  }
+  @supports not (color: color-mix(in srgb, red 50%, blue)) {
+    #VisionBand-{{ sid }} .vb-w {
+      color: var(--vb-body);
+      opacity: calc(0.4 + var(--wp) * 0.6);
+    }
+  }
+  #VisionBand-{{ sid }} .vb-vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ---- Marquee button (shared pattern) ---- */
+  #VisionBand-{{ sid }} .vb-btnrow {
+    margin-top: 64px;
+    text-align: {{ s.align }};
+  }
+  #VisionBand-{{ sid }} .vb-btn {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    padding: 15px 36px;
+    border: 1px solid var(--vb-btn-ink);
+    border-radius: 999px;
+    background: transparent;
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--vb-btn-ink);
+  }
+  #VisionBand-{{ sid }} .vb-btn:focus-visible {
+    outline: 1px solid var(--vb-btn-ink);
+    outline-offset: 3px;
+  }
+  #VisionBand-{{ sid }} .vb-btn__static {
+    display: block;
+    white-space: nowrap;
+    transition: opacity 400ms var(--ease);
+  }
+  #VisionBand-{{ sid }} .vb-btn__track {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    display: flex;
+    gap: 2.5em;
+    width: max-content;
+    opacity: 0;
+    transform: translate(0, -50%);
+    white-space: nowrap;
+    animation: vb-btn-marquee var(--vb-btn-speed) linear infinite;
+    animation-play-state: paused;
+    animation-direction: var(--vb-btn-dir);
+    transition: opacity 400ms var(--ease);
+    pointer-events: none;
+  }
+  #VisionBand-{{ sid }} .vb-btn[data-ready]:hover .vb-btn__static,
+  #VisionBand-{{ sid }} .vb-btn[data-ready]:focus-visible .vb-btn__static {
+    opacity: 0;
+  }
+  #VisionBand-{{ sid }} .vb-btn[data-ready]:hover .vb-btn__track,
+  #VisionBand-{{ sid }} .vb-btn[data-ready]:focus-visible .vb-btn__track {
+    opacity: 1;
+    animation-play-state: running;
+  }
+  @keyframes vb-btn-marquee {
+    from { transform: translate(0, -50%); }
+    to { transform: translate(calc(-1 * var(--marquee-loop, 200px)), -50%); }
+  }
+
+  /* ---- Decorative illustration blocks. "Invert to light" runs the
+         PNG through brightness(0) invert(1) — a white silhouette.
+         Genuinely light-colored PNG versions will always look better
+         than this filter; it exists as a convenience. ---- */
+  #VisionBand-{{ sid }} .vb-illo {
+    position: absolute;
+    z-index: 0;
+    width: var(--illo-size);
+    opacity: var(--illo-o);
+    pointer-events: none;
+  }
+  #VisionBand-{{ sid }} .vb-illo--above { z-index: 2; }
+  #VisionBand-{{ sid }} .vb-illo img {
+    width: 100%;
+    height: auto;
+    transform: rotate(var(--illo-rot));
+  }
+  #VisionBand-{{ sid }} .vb-illo--invert img { filter: brightness(0) invert(1); }
+  #VisionBand-{{ sid }} .vb-illo--top-left { top: calc(4% + var(--illo-y)); left: calc(4% + var(--illo-x)); }
+  #VisionBand-{{ sid }} .vb-illo--top-right { top: calc(4% + var(--illo-y)); right: calc(4% - var(--illo-x)); }
+  #VisionBand-{{ sid }} .vb-illo--beside-heading { top: calc(6% + var(--illo-y)); right: calc(12% - var(--illo-x)); }
+  #VisionBand-{{ sid }} .vb-illo--left-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); left: calc(2% + var(--illo-x)); }
+  #VisionBand-{{ sid }} .vb-illo--right-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); right: calc(2% - var(--illo-x)); }
+  #VisionBand-{{ sid }} .vb-illo--bottom-left { bottom: calc(4% - var(--illo-y)); left: calc(4% + var(--illo-x)); }
+  #VisionBand-{{ sid }} .vb-illo--bottom-right { bottom: calc(4% - var(--illo-y)); right: calc(4% - var(--illo-x)); }
+
+  #VisionBand-{{ sid }}[data-animate='true'] .vb-illo--float {
+    animation: vb-illo-float var(--illo-float, 8s) ease-in-out infinite;
+  }
+  @keyframes vb-illo-float {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -12px, 0); }
+  }
+
+  /* ---- Responsive. Tablet: label keeps its column, title and body
+         stack beside it. Mobile: full vertical stack per row. ---- */
+  @media (min-width: 750px) {
+    #VisionBand-{{ sid }} .vb-container { padding: 0 40px; }
+  }
+  @media (min-width: 750px) and (max-width: 989px) {
+    #VisionBand-{{ sid }} .vb-row__grid,
+    #VisionBand-{{ sid }} .vb-row__grid--media {
+      grid-template-columns: 90px 1fr;
+    }
+    #VisionBand-{{ sid }} .vb-row__title,
+    #VisionBand-{{ sid }} .vb-row__body { grid-column: 2; }
+    #VisionBand-{{ sid }} .vb-row__media { grid-column: 2; justify-self: end; }
+  }
+  @media (max-width: 749px) {
+    #VisionBand-{{ sid }} {
+      padding-top: {{ s.pad_top_m }}px;
+      padding-bottom: {{ s.pad_bottom_m }}px;
+    }
+    #VisionBand-{{ sid }} .vb-header { margin-bottom: 48px; }
+    #VisionBand-{{ sid }} .vb-row { padding: 30px 0; }
+    #VisionBand-{{ sid }} .vb-row__grid,
+    #VisionBand-{{ sid }} .vb-row__grid--media {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    #VisionBand-{{ sid }} .vb-row__media { justify-self: start; }
+    #VisionBand-{{ sid }} .vb-btnrow { margin-top: 44px; }
+    #VisionBand-{{ sid }} .vb-illo { display: none; }
+    #VisionBand-{{ sid }} .vb-illo--m { display: block; }
+  }
+
+  /* ---- Reduced motion: final state everywhere ---- */
+  @media (prefers-reduced-motion: reduce) {
+    #VisionBand-{{ sid }} .vb-row__rule { transform: none !important; }
+    #VisionBand-{{ sid }} .vb-row__label,
+    #VisionBand-{{ sid }} .vb-row__title,
+    #VisionBand-{{ sid }} .vb-row__body,
+    #VisionBand-{{ sid }} .vb-row__media {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    #VisionBand-{{ sid }} .vb-w { color: var(--vb-body) !important; opacity: 1 !important; }
+    #VisionBand-{{ sid }} .vb-illo { animation: none !important; }
+    #VisionBand-{{ sid }} .vb-btn__track { display: none; }
+    #VisionBand-{{ sid }} .vb-btn[data-ready]:hover .vb-btn__static,
+    #VisionBand-{{ sid }} .vb-btn[data-ready]:focus-visible .vb-btn__static { opacity: 1; }
+  }
+{% endstyle %}
+
+<div
+  id="VisionBand-{{ sid }}"
+  data-vision-band
+  data-animate="{{ s.enable_animations }}"
+  data-sweep="{{ s.enable_sweep }}"
+  data-start="{{ s.anim_start }}"
+  data-end="{{ s.anim_end }}"
+  data-sweep-start="{{ s.sweep_start }}"
+  data-sweep-end="{{ s.sweep_end }}"
+>
+  {%- for block in section.blocks -%}
+    {%- if block.type == 'illustration' and block.settings.image != blank -%}
+      <div
+        class="vb-illo vb-illo--{{ block.settings.position }}{% if block.settings.show_mobile %} vb-illo--m{% endif %}{% if block.settings.float %} vb-illo--float{% endif %}{% if block.settings.above %} vb-illo--above{% endif %}{% if block.settings.invert %} vb-illo--invert{% endif %}"
+        style="--illo-size: {{ block.settings.size }}px; --illo-x: {{ block.settings.offset_x }}px; --illo-y: {{ block.settings.offset_y }}px; --illo-rot: {{ block.settings.rotation }}deg; --illo-o: {{ block.settings.opacity | divided_by: 100.0 }}; --illo-float: {{ block.settings.float_speed }}s;"
+        aria-hidden="true"
+        {{ block.shopify_attributes }}
+      >
+        {{ block.settings.image | image_url: width: 560 | image_tag: loading: 'lazy', alt: '', widths: '280, 560', sizes: '280px' }}
+      </div>
+    {%- endif -%}
+  {%- endfor -%}
+
+  <div class="vb-container">
+    {%- if s.show_label or s.heading != blank or s.intro != blank -%}
+      <div class="vb-header">
+        {%- if s.show_label and s.label_text != blank -%}
+          <span class="vb-label">{{ s.label_text | escape }}</span>
+        {%- endif -%}
+        {%- if s.heading != blank -%}
+          <{{ s.heading_tag }} class="vb-heading">{{ s.heading | escape }}</{{ s.heading_tag }}>
+        {%- endif -%}
+        {%- if s.intro != blank -%}
+          <div class="vb-intro">{{ s.intro }}</div>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+
+    <div class="vb-rows">
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'row' -%}
+          <div class="vb-row" data-row {{ block.shopify_attributes }}>
+            <span class="vb-row__rule" aria-hidden="true"></span>
+            <div class="vb-row__grid{% if block.settings.image != blank %} vb-row__grid--media{% endif %}">
+              {%- if block.settings.label != blank -%}
+                <span class="vb-row__label">{{ block.settings.label | escape }}</span>
+              {%- else -%}
+                <span class="vb-row__label" aria-hidden="true"></span>
+              {%- endif -%}
+              {%- if block.settings.title != blank -%}
+                <h3 class="vb-row__title">{{ block.settings.title | escape }}</h3>
+              {%- else -%}
+                <span class="vb-row__title" aria-hidden="true"></span>
+              {%- endif -%}
+              {%- if block.settings.body != blank -%}
+                <div class="vb-row__body" data-sweep-text>{{ block.settings.body }}</div>
+              {%- endif -%}
+              {%- if block.settings.image != blank -%}
+                <div class="vb-row__media">
+                  {{ block.settings.image | image_url: width: 440 | image_tag: loading: 'lazy', widths: '220, 440', sizes: '220px' }}
+                </div>
+              {%- endif -%}
+            </div>
+          </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+
+    {%- if s.show_button and s.button_label != blank -%}
+      <div class="vb-btnrow">
+        <a class="vb-btn" href="{{ s.button_link | default: '#' }}" data-marquee>
+          <span class="vb-btn__static">{{ s.button_label | escape }}</span>
+          <span class="vb-btn__track" aria-hidden="true" data-marquee-track>
+            <span data-marquee-copy>{{ s.button_label | escape }}</span>
+          </span>
+        </a>
+      </div>
+    {%- endif -%}
+  </div>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    /* Word splitter shared with the hero: wraps words in indexed spans,
+       preserves inline markup, never produces empty spans. */
+    function splitWords(container, className) {
+      var idx = 0;
+      function walk(node) {
+        var child = node.firstChild;
+        while (child) {
+          var next = child.nextSibling;
+          if (child.nodeType === 3) {
+            if (child.nodeValue.trim() !== '') {
+              var frag = document.createDocumentFragment();
+              var parts = child.nodeValue.split(/(\s+)/);
+              for (var i = 0; i < parts.length; i++) {
+                if (parts[i] === '') continue;
+                if (/^\s+$/.test(parts[i])) {
+                  frag.appendChild(document.createTextNode(parts[i]));
+                } else {
+                  var w = document.createElement('span');
+                  w.className = className;
+                  w.style.setProperty('--wi', idx++);
+                  w.textContent = parts[i];
+                  frag.appendChild(w);
+                }
+              }
+              node.replaceChild(frag, child);
+            }
+          } else if (child.nodeType === 1) {
+            walk(child);
+          }
+          child = next;
+        }
+      }
+      walk(container);
+      return idx;
+    }
+
+    /* Shared marquee-button builder (see about-hero for the pattern) */
+    function buildMarquee(btn) {
+      if (!btn) return null;
+      var track = btn.querySelector('[data-marquee-track]');
+      var copy = btn.querySelector('[data-marquee-copy]');
+      if (!track || !copy) return null;
+      function build() {
+        var clones = track.querySelectorAll('[data-clone]');
+        for (var i = 0; i < clones.length; i++) track.removeChild(clones[i]);
+        var gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+        var unit = copy.getBoundingClientRect().width + gap;
+        if (unit <= gap) return;
+        var needed = Math.ceil((btn.clientWidth + unit) / unit) + 1;
+        for (var j = 0; j < needed; j++) {
+          var c = copy.cloneNode(true);
+          c.setAttribute('data-clone', '');
+          track.appendChild(c);
+        }
+        btn.style.setProperty('--marquee-loop', unit + 'px');
+        btn.setAttribute('data-ready', '');
+      }
+      build();
+      return build;
+    }
+
+    function initVisionBand(root) {
+      if (!root || root.dataset.init === 'true') return;
+      root.dataset.init = 'true';
+
+      var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
+      var rebuildMarquee = buildMarquee(root.querySelector('[data-marquee]'));
+
+      var animOn = root.dataset.animate === 'true';
+      if (!animOn || prm.matches) return;
+
+      var rows = Array.prototype.slice.call(root.querySelectorAll('[data-row]'));
+      var sweepOn = root.dataset.sweep === 'true';
+      var startPct = (parseFloat(root.dataset.start) || 90) / 100;
+      var endPct = (parseFloat(root.dataset.end) || 60) / 100;
+      var sweepStartPct = (parseFloat(root.dataset.sweepStart) || 85) / 100;
+      var sweepEndPct = (parseFloat(root.dataset.sweepEnd) || 35) / 100;
+
+      /* Split each row body once and cache. A visually-hidden clone of
+         the untouched richtext keeps the copy accessible; the split
+         copy is aria-hidden. */
+      var sweeps = [];
+      if (sweepOn) {
+        rows.forEach(function (row) {
+          var body = row.querySelector('[data-sweep-text]');
+          if (!body || body.dataset.split === 'true') return;
+          body.dataset.split = 'true';
+          var accessible = body.cloneNode(true);
+          accessible.className = 'vb-vh';
+          accessible.removeAttribute('data-sweep-text');
+          body.parentNode.insertBefore(accessible, body);
+          body.setAttribute('aria-hidden', 'true');
+          var total = splitWords(body, 'vb-w');
+          if (total > 0) {
+            body.style.setProperty('--wt', total);
+            sweeps.push({ el: body, top: 0, h: 1 });
+          }
+        });
+      }
+
+      var vh = 1;
+      var items = [];
+      var ticking = false;
+
+      function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+      function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+      function phase(p, a, b) { return easeOut(clamp01((p - a) / (b - a))); }
+
+      function measure() {
+        vh = window.innerHeight || 1;
+        var y = window.scrollY;
+        items = rows.map(function (el) {
+          return { el: el, top: el.getBoundingClientRect().top + y };
+        });
+        sweeps.forEach(function (sw) {
+          var r = sw.el.getBoundingClientRect();
+          sw.top = r.top + y;
+          sw.h = r.height;
+        });
+      }
+
+      function frame() {
+        ticking = false;
+        var y = window.scrollY;
+        var startPx = vh * startPct;
+        var endPx = vh * endPct;
+        for (var i = 0; i < items.length; i++) {
+          var inView = items[i].top - y;
+          var p = clamp01((startPx - inView) / (startPx - endPx));
+          var st = items[i].el.style;
+          st.setProperty('--p-rule', phase(p, 0, 0.4).toFixed(3));
+          st.setProperty('--p-a', phase(p, 0.15, 0.55).toFixed(3));
+          st.setProperty('--p-b', phase(p, 0.25, 0.7).toFixed(3));
+          st.setProperty('--p-c', phase(p, 0.35, 0.85).toFixed(3));
+        }
+        var sStart = vh * sweepStartPct;
+        var sEnd = vh * sweepEndPct;
+        for (var j = 0; j < sweeps.length; j++) {
+          var sw = sweeps[j];
+          var sp = clamp01((sStart - (sw.top - y)) / (sStart - sEnd));
+          sw.el.style.setProperty('--sweep', sp.toFixed(4));
+        }
+      }
+
+      function onScroll() {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(frame);
+        }
+      }
+
+      var resizeTimer = null;
+      function onResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+          measure();
+          if (rebuildMarquee) rebuildMarquee();
+          onScroll();
+        }, 150);
+      }
+
+      function toFinal() {
+        window.removeEventListener('scroll', onScroll);
+        items.forEach(function (it) {
+          ['--p-rule', '--p-a', '--p-b', '--p-c'].forEach(function (prop) {
+            it.el.style.removeProperty(prop);
+          });
+        });
+        sweeps.forEach(function (sw) { sw.el.style.removeProperty('--sweep'); });
+      }
+
+      /* First paint: set progress synchronously so nothing flashes */
+      measure();
+      frame();
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onResize);
+      window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+
+      function onMotionChange() {
+        if (prm.matches) toFinal();
+      }
+      if (prm.addEventListener) prm.addEventListener('change', onMotionChange);
+
+      root.__teardown = function () {
+        toFinal();
+        window.removeEventListener('resize', onResize);
+        if (prm.removeEventListener) prm.removeEventListener('change', onMotionChange);
+      };
+    }
+
+    if (!window.__visionBandReady) {
+      window.__visionBandReady = true;
+      document.addEventListener('shopify:section:load', function (event) {
+        var el = event.target.querySelector('[data-vision-band]');
+        if (el) initVisionBand(el);
+      });
+      document.addEventListener('shopify:section:unload', function (event) {
+        var el = event.target.querySelector('[data-vision-band]');
+        if (el && el.__teardown) el.__teardown();
+      });
+    }
+    initVisionBand(document.getElementById('VisionBand-{{ sid }}'));
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Vision band",
+  "tag": "section",
+  "class": "section-vision-band",
+  "max_blocks": 10,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_label",
+      "label": "Show micro-label",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "label_text",
+      "label": "Micro-label",
+      "default": "OUR VISION"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Where this is going"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro paragraph",
+      "info": "Optional. Leave empty to hide."
+    },
+    {
+      "type": "select",
+      "id": "align",
+      "label": "Header alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "header",
+      "content": "Rows"
+    },
+    {
+      "type": "select",
+      "id": "row_grid",
+      "label": "Row proportions",
+      "options": [
+        { "value": "narrow", "label": "Narrow label" },
+        { "value": "balanced", "label": "Balanced" },
+        { "value": "title-wide", "label": "Wide title" }
+      ],
+      "default": "balanced"
+    },
+    {
+      "type": "range",
+      "id": "image_width",
+      "label": "Row image width",
+      "min": 60,
+      "max": 220,
+      "step": 10,
+      "unit": "px",
+      "default": 120
+    },
+    {
+      "type": "header",
+      "content": "Band edges"
+    },
+    {
+      "type": "select",
+      "id": "edge_style",
+      "label": "Edge style",
+      "options": [
+        { "value": "straight", "label": "Straight" },
+        { "value": "top", "label": "Curved top" },
+        { "value": "both", "label": "Curved top and bottom" }
+      ],
+      "default": "straight"
+    },
+    {
+      "type": "range",
+      "id": "edge_radius",
+      "label": "Curve radius",
+      "min": 0,
+      "max": 80,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "header",
+      "content": "Typography"
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag",
+      "options": [
+        { "value": "h1", "label": "H1" },
+        { "value": "h2", "label": "H2" },
+        { "value": "h3", "label": "H3" }
+      ],
+      "default": "h2"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size — desktop",
+      "min": 24,
+      "max": 80,
+      "step": 2,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "heading_size_m",
+      "label": "Heading size — mobile",
+      "min": 20,
+      "max": 48,
+      "step": 2,
+      "unit": "px",
+      "default": 32
+    },
+    {
+      "type": "range",
+      "id": "title_size",
+      "label": "Row title size",
+      "min": 18,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 26
+    },
+    {
+      "type": "range",
+      "id": "body_size",
+      "label": "Row body size",
+      "min": 13,
+      "max": 20,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "color_bg",
+      "label": "Band background",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "color",
+      "id": "color_heading",
+      "label": "Heading",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color",
+      "id": "color_label",
+      "label": "Micro-label",
+      "default": "#A8927D"
+    },
+    {
+      "type": "color",
+      "id": "color_intro",
+      "label": "Intro text",
+      "default": "#D8C9B4"
+    },
+    {
+      "type": "color",
+      "id": "color_row_label",
+      "label": "Row labels",
+      "default": "#A8927D"
+    },
+    {
+      "type": "color",
+      "id": "color_title",
+      "label": "Row titles",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color",
+      "id": "color_body",
+      "label": "Row body (full)",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color",
+      "id": "color_muted_word",
+      "label": "Row body (muted, before sweep)",
+      "default": "#6F5B49"
+    },
+    {
+      "type": "color",
+      "id": "color_hairline",
+      "label": "Hairlines",
+      "default": "#54453D"
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show button",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "SEE WHAT'S NEXT"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link"
+    },
+    {
+      "type": "select",
+      "id": "button_direction",
+      "label": "Button marquee direction",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "button_speed",
+      "label": "Button marquee speed",
+      "min": 2,
+      "max": 12,
+      "step": 0.5,
+      "unit": "s",
+      "default": 6
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button border and text",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "header",
+      "content": "Animation"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_animations",
+      "label": "Enable animations",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "anim_start",
+      "label": "Row entrance start (viewport offset)",
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 90
+    },
+    {
+      "type": "range",
+      "id": "anim_end",
+      "label": "Row entrance end (viewport offset)",
+      "min": 10,
+      "max": 80,
+      "step": 5,
+      "unit": "%",
+      "default": 60
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_sweep",
+      "label": "Enable word color sweep",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "sweep_start",
+      "label": "Sweep start (viewport offset)",
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 85
+    },
+    {
+      "type": "range",
+      "id": "sweep_end",
+      "label": "Sweep end (viewport offset)",
+      "min": 10,
+      "max": 80,
+      "step": 5,
+      "unit": "%",
+      "default": 35
+    },
+    {
+      "type": "header",
+      "content": "Spacing"
+    },
+    {
+      "type": "range",
+      "id": "pad_top",
+      "label": "Top padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 120
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom",
+      "label": "Bottom padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 120
+    },
+    {
+      "type": "range",
+      "id": "pad_top_m",
+      "label": "Top padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom_m",
+      "label": "Bottom padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    }
+  ],
+  "blocks": [
+    {
+      "type": "row",
+      "name": "Row",
+      "settings": [
+        {
+          "type": "text",
+          "id": "label",
+          "label": "Number or short label",
+          "default": "01"
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Title",
+          "default": "Fewer, better things"
+        },
+        {
+          "type": "richtext",
+          "id": "body",
+          "label": "Body",
+          "default": "<p>A few lines about this part of the vision, swept word by word from muted to cream as the reader scrolls.</p>"
+        },
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Small image",
+          "info": "Optional, right-aligned. Gold product photography reads strongest on dark."
+        }
+      ]
+    },
+    {
+      "type": "illustration",
+      "name": "Illustration",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image",
+          "info": "Transparent PNG brand element. Decorative only."
+        },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "options": [
+            { "value": "top-left", "label": "Top left" },
+            { "value": "top-right", "label": "Top right" },
+            { "value": "beside-heading", "label": "Beside heading" },
+            { "value": "left-center", "label": "Left of content" },
+            { "value": "right-center", "label": "Right of content" },
+            { "value": "bottom-left", "label": "Bottom left" },
+            { "value": "bottom-right", "label": "Bottom right" }
+          ],
+          "default": "top-right"
+        },
+        {
+          "type": "range",
+          "id": "offset_x",
+          "label": "Offset X",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "offset_y",
+          "label": "Offset Y",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "size",
+          "label": "Size",
+          "min": 40,
+          "max": 280,
+          "step": 4,
+          "unit": "px",
+          "default": 120
+        },
+        {
+          "type": "range",
+          "id": "rotation",
+          "label": "Rotation",
+          "min": -30,
+          "max": 30,
+          "step": 1,
+          "unit": "deg",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "opacity",
+          "label": "Opacity",
+          "min": 10,
+          "max": 100,
+          "step": 5,
+          "unit": "%",
+          "default": 100
+        },
+        {
+          "type": "checkbox",
+          "id": "show_mobile",
+          "label": "Show on mobile",
+          "default": false
+        },
+        {
+          "type": "checkbox",
+          "id": "float",
+          "label": "Slow float animation",
+          "default": false
+        },
+        {
+          "type": "range",
+          "id": "float_speed",
+          "label": "Float duration",
+          "min": 6,
+          "max": 10,
+          "step": 0.5,
+          "unit": "s",
+          "default": 8
+        },
+        {
+          "type": "checkbox",
+          "id": "above",
+          "label": "Place above content",
+          "default": false
+        },
+        {
+          "type": "checkbox",
+          "id": "invert",
+          "label": "Invert to light",
+          "default": false,
+          "info": "Renders the PNG as a light silhouette for the dark band. A genuinely light PNG version will always look better."
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Vision band",
+      "blocks": [
+        { "type": "row" },
+        { "type": "row" },
+        { "type": "row" }
+      ]
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,523 @@
+{% comment %}
+  ------------------------------------------------------------------
+  Word Ribbon — thin full-width auto-scrolling word strip
+  ------------------------------------------------------------------
+  Words (blocks) joined by a separator form one sequence. JS measures
+  the sequence, clones it enough times to cover the viewport plus one
+  full sequence width, and drives the position in a rAF loop so the
+  loop distance is always an integer number of sequence widths —
+  seamless at any word count (same loop math as the marquee buttons).
+
+  The rAF loop also implements scroll-velocity coupling: playback
+  rate lerps up while the user scrolls fast and eases back to base,
+  never snapping. Optional smooth reversal on scroll up, optional
+  pause on hover (also lerped).
+
+  Progressive enhancement: without JS (or under reduced motion) the
+  single sequence renders static and centered. No illustration
+  blocks in this section by design. Scoped by section id; multiple
+  instances safe; re-initializes on shopify:section:load.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  if s.direction == 'right'
+    assign dir_factor = -1
+  else
+    assign dir_factor = 1
+  endif
+-%}
+
+{% style %}
+  /* ---- Per-instance design tokens ---- */
+  #WordRibbon-{{ sid }} {
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --wr-ink: {{ s.color_text }};
+    --wr-hairline: {{ s.color_hairline }};
+    --wr-size: clamp({{ s.size_mobile }}px, 2.4vw, {{ s.size_desktop }}px);
+    --wr-speed: {{ s.speed }};
+
+    position: relative;
+    overflow: hidden;
+    {% if s.bg_transparent %}
+    background-color: transparent;
+    {% else %}
+    background-color: {{ s.color_bg }};
+    {% endif %}
+    {% if s.hairline_top %}
+    border-top: 1px solid var(--wr-hairline);
+    {% endif %}
+    {% if s.hairline_bottom %}
+    border-bottom: 1px solid var(--wr-hairline);
+    {% endif %}
+    padding-top: {{ s.pad_top }}px;
+    padding-bottom: {{ s.pad_bottom }}px;
+    color: var(--wr-ink);
+  }
+
+  /* ---- Track: centered static sequence until JS takes over ---- */
+  #WordRibbon-{{ sid }} .wr-track {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    white-space: nowrap;
+  }
+  #WordRibbon-{{ sid }}[data-ready] .wr-track {
+    justify-content: flex-start;
+    width: max-content;
+    will-change: transform;
+  }
+
+  #WordRibbon-{{ sid }} .wr-seq {
+    display: inline-flex;
+    align-items: baseline;
+    flex-shrink: 0;
+  }
+
+  #WordRibbon-{{ sid }} .wr-word,
+  #WordRibbon-{{ sid }} .wr-sep {
+    font-size: var(--wr-size);
+    line-height: 1.3;
+  }
+  {% if s.style == 'serif' %}
+  #WordRibbon-{{ sid }} .wr-word,
+  #WordRibbon-{{ sid }} .wr-sep {
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+  {% else %}
+  #WordRibbon-{{ sid }} .wr-word,
+  #WordRibbon-{{ sid }} .wr-sep {
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  {% endif %}
+  #WordRibbon-{{ sid }} .wr-sep {
+    margin: 0 0.7em;
+    opacity: 0.55;
+  }
+  /* Static (no-JS) rendering: the trailing separator only exists to
+     join loop repeats, so hide it while the ribbon isn't looping */
+  #WordRibbon-{{ sid }}:not([data-ready]) .wr-seq .wr-sep:last-child {
+    display: none;
+  }
+
+  @media (max-width: 749px) {
+    #WordRibbon-{{ sid }} {
+      padding-top: {{ s.pad_top_m }}px;
+      padding-bottom: {{ s.pad_bottom_m }}px;
+    }
+  }
+
+  /* Reduced motion: JS never starts, but belt-and-braces reset here */
+  @media (prefers-reduced-motion: reduce) {
+    #WordRibbon-{{ sid }} .wr-track {
+      transform: none !important;
+      justify-content: center;
+      width: 100%;
+    }
+    #WordRibbon-{{ sid }} .wr-seq[data-clone] { display: none; }
+    #WordRibbon-{{ sid }} .wr-seq:first-child .wr-sep:last-child { display: none; }
+  }
+{% endstyle %}
+
+<div
+  id="WordRibbon-{{ sid }}"
+  data-word-ribbon
+  data-animate="{{ s.enable_animations }}"
+  data-speed="{{ s.speed }}"
+  data-direction="{{ dir_factor }}"
+  data-coupling="{{ s.velocity_coupling }}"
+  data-reverse-up="{{ s.reverse_on_up }}"
+  data-pause-hover="{{ s.pause_hover }}"
+>
+  <div class="wr-track" data-track>
+    <div class="wr-seq" data-seq>
+      {%- for block in section.blocks -%}
+        {%- if block.settings.text != blank -%}
+          <span class="wr-word" {{ block.shopify_attributes }}>{{ block.settings.text | escape }}</span>
+          <span class="wr-sep" aria-hidden="true">{{ s.separator | escape }}</span>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    function initWordRibbon(root) {
+      if (!root || root.dataset.init === 'true') return;
+      root.dataset.init = 'true';
+
+      var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
+      var track = root.querySelector('[data-track]');
+      var seq = root.querySelector('[data-seq]');
+      if (!track || !seq || seq.children.length === 0) return;
+
+      var animOn = root.dataset.animate === 'true';
+      var loopSeconds = parseFloat(root.dataset.speed) || 20;
+      var settingDir = parseInt(root.dataset.direction, 10) || 1;
+      var coupling = root.dataset.coupling === 'true';
+      var reverseUp = root.dataset.reverseUp === 'true';
+      var pauseHover = root.dataset.pauseHover === 'true';
+
+      /* Motion state. rate and dir are smoothed (lerped) each frame so
+         speed and direction changes ease, never snap. */
+      var seqW = 0;
+      var x = 0;
+      var rate = 1;
+      var dir = 1;
+      var hovering = false;
+      var lastY = window.scrollY;
+      var idleMs = 1000;
+      var raf = null;
+      var lastT = 0;
+      var visible = true;
+
+      function build() {
+        var clones = track.querySelectorAll('[data-clone]');
+        for (var i = 0; i < clones.length; i++) track.removeChild(clones[i]);
+        seqW = seq.getBoundingClientRect().width;
+        if (seqW <= 0) return false;
+        /* Cover the viewport plus one sequence so a translate of one
+           full sequence width is always invisible */
+        var needed = Math.ceil(root.clientWidth / seqW) + 1;
+        for (var j = 0; j < needed; j++) {
+          var c = seq.cloneNode(true);
+          c.setAttribute('data-clone', '');
+          c.setAttribute('aria-hidden', 'true');
+          track.appendChild(c);
+        }
+        root.setAttribute('data-ready', '');
+        return true;
+      }
+
+      function loop(t) {
+        raf = requestAnimationFrame(loop);
+        var dt = Math.min(64, t - lastT || 16);
+        lastT = t;
+
+        /* Scroll velocity, px per second (reading scrollY only — no
+           layout is forced inside the frame loop) */
+        var y = window.scrollY;
+        var dy = y - lastY;
+        lastY = y;
+        var vel = Math.abs(dy) / dt * 1000;
+        if (Math.abs(dy) > 0) idleMs = 0; else idleMs += dt;
+
+        var targetRate = 1;
+        if (coupling) targetRate = 1 + Math.min(vel / 1400, 2.2);
+        if (pauseHover && hovering) targetRate = 0;
+        rate += (targetRate - rate) * 0.07;
+
+        var targetDir = 1;
+        if (reverseUp && dy < 0) targetDir = -1;
+        if (reverseUp && idleMs > 400) targetDir = 1;
+        dir += ((reverseUp ? targetDir : 1) - dir) * 0.05;
+
+        x -= (seqW / loopSeconds) * rate * dir * settingDir * (dt / 1000);
+        /* Wrap into (-seqW, 0]: the pattern is periodic in seqW, so the
+           jump is invisible */
+        x = x % seqW;
+        if (x > 0) x -= seqW;
+        track.style.transform = 'translate3d(' + x.toFixed(2) + 'px, 0, 0)';
+      }
+
+      function start() {
+        if (raf === null && visible) {
+          lastT = 0;
+          lastY = window.scrollY;
+          raf = requestAnimationFrame(loop);
+        }
+      }
+      function stop() {
+        if (raf !== null) {
+          cancelAnimationFrame(raf);
+          raf = null;
+        }
+      }
+
+      function toStatic() {
+        stop();
+        var clones = track.querySelectorAll('[data-clone]');
+        for (var i = 0; i < clones.length; i++) track.removeChild(clones[i]);
+        track.style.transform = '';
+        root.removeAttribute('data-ready');
+      }
+
+      if (!animOn || prm.matches) return;
+      if (!build()) return;
+
+      /* Pause the loop entirely while the ribbon is offscreen */
+      var io = null;
+      if ('IntersectionObserver' in window) {
+        io = new IntersectionObserver(function (entries) {
+          visible = entries[0].isIntersecting;
+          if (visible) start(); else stop();
+        });
+        io.observe(root);
+      }
+      start();
+
+      root.addEventListener('mouseenter', function () { hovering = true; });
+      root.addEventListener('mouseleave', function () { hovering = false; });
+
+      var resizeTimer = null;
+      function onResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+          build();
+          x = x % (seqW || 1);
+        }, 150);
+      }
+      window.addEventListener('resize', onResize);
+
+      function onMotionChange() {
+        if (prm.matches) toStatic();
+      }
+      if (prm.addEventListener) prm.addEventListener('change', onMotionChange);
+
+      root.__teardown = function () {
+        toStatic();
+        if (io) io.disconnect();
+        window.removeEventListener('resize', onResize);
+        if (prm.removeEventListener) prm.removeEventListener('change', onMotionChange);
+      };
+    }
+
+    if (!window.__wordRibbonReady) {
+      window.__wordRibbonReady = true;
+      document.addEventListener('shopify:section:load', function (event) {
+        var el = event.target.querySelector('[data-word-ribbon]');
+        if (el) initWordRibbon(el);
+      });
+      document.addEventListener('shopify:section:unload', function (event) {
+        var el = event.target.querySelector('[data-word-ribbon]');
+        if (el && el.__teardown) el.__teardown();
+      });
+    }
+    initWordRibbon(document.getElementById('WordRibbon-{{ sid }}'));
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Word ribbon",
+  "tag": "section",
+  "class": "section-word-ribbon",
+  "max_blocks": 10,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "text",
+      "id": "separator",
+      "label": "Separator",
+      "default": "·"
+    },
+    {
+      "type": "header",
+      "content": "Motion"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_animations",
+      "label": "Enable animations",
+      "default": true,
+      "info": "Off (or reduced motion): the ribbon renders static and centered."
+    },
+    {
+      "type": "select",
+      "id": "direction",
+      "label": "Direction",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "speed",
+      "label": "Base speed (seconds per loop)",
+      "min": 5,
+      "max": 60,
+      "step": 1,
+      "unit": "s",
+      "default": 20
+    },
+    {
+      "type": "checkbox",
+      "id": "velocity_coupling",
+      "label": "Speed up with scroll velocity",
+      "default": true,
+      "info": "Playback rate eases up while scrolling fast and back down when scrolling stops."
+    },
+    {
+      "type": "checkbox",
+      "id": "reverse_on_up",
+      "label": "Reverse on scroll up",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "pause_hover",
+      "label": "Pause on hover",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "Typography"
+    },
+    {
+      "type": "select",
+      "id": "style",
+      "label": "Type style",
+      "options": [
+        { "value": "serif", "label": "Serif" },
+        { "value": "sans", "label": "Uppercase sans" }
+      ],
+      "default": "serif"
+    },
+    {
+      "type": "range",
+      "id": "size_desktop",
+      "label": "Word size — desktop",
+      "min": 14,
+      "max": 48,
+      "step": 1,
+      "unit": "px",
+      "default": 22
+    },
+    {
+      "type": "range",
+      "id": "size_mobile",
+      "label": "Word size — mobile",
+      "min": 12,
+      "max": 32,
+      "step": 1,
+      "unit": "px",
+      "default": 15
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "color_text",
+      "label": "Text",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "checkbox",
+      "id": "bg_transparent",
+      "label": "Transparent background",
+      "default": true,
+      "info": "On: inherits the page background. Off: uses the color below (try dark espresso for an inverted strip)."
+    },
+    {
+      "type": "color",
+      "id": "color_bg",
+      "label": "Background",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "checkbox",
+      "id": "hairline_top",
+      "label": "Top hairline",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "hairline_bottom",
+      "label": "Bottom hairline",
+      "default": true
+    },
+    {
+      "type": "color",
+      "id": "color_hairline",
+      "label": "Hairline",
+      "default": "#E3D7C3"
+    },
+    {
+      "type": "header",
+      "content": "Spacing"
+    },
+    {
+      "type": "range",
+      "id": "pad_top",
+      "label": "Top padding — desktop",
+      "min": 0,
+      "max": 80,
+      "step": 2,
+      "unit": "px",
+      "default": 18
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom",
+      "label": "Bottom padding — desktop",
+      "min": 0,
+      "max": 80,
+      "step": 2,
+      "unit": "px",
+      "default": 18
+    },
+    {
+      "type": "range",
+      "id": "pad_top_m",
+      "label": "Top padding — mobile",
+      "min": 0,
+      "max": 60,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom_m",
+      "label": "Bottom padding — mobile",
+      "min": 0,
+      "max": 60,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    }
+  ],
+  "blocks": [
+    {
+      "type": "word",
+      "name": "Word",
+      "settings": [
+        {
+          "type": "text",
+          "id": "text",
+          "label": "Word",
+          "default": "Essential"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Word ribbon",
+      "blocks": [
+        { "type": "word", "settings": { "text": "Playful" } },
+        { "type": "word", "settings": { "text": "Essential" } },
+        { "type": "word", "settings": { "text": "Intimate" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

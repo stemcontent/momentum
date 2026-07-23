@@ -1,0 +1,1057 @@
+{% comment %}
+  ------------------------------------------------------------------
+  FAQ Accordion — deliberately the calmest section on the page
+  ------------------------------------------------------------------
+  Hairline-divided accordion rows: serif question, thin plus (or
+  chevron) icon rotating open, answers in quiet richtext. Buttons
+  control regions via aria-expanded / aria-controls; the height
+  transition uses the grid-template-rows 0fr/1fr technique so no JS
+  measuring is needed.
+
+  Progressive enhancement: rows only collapse once JS stamps
+  data-faq-ready on the root — without JS every answer is readable.
+  Scroll entrance is a gentle one-shot fade-up per row through
+  IntersectionObserver with a small stagger; that restraint is the
+  design. FAQPage JSON-LD is emitted from the question blocks
+  (toggleable). Scoped by section id; multiple instances safe;
+  re-initializes on shopify:section:load.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  if s.button_direction == 'right'
+    assign btn_dir = 'reverse'
+  else
+    assign btn_dir = 'normal'
+  endif
+-%}
+
+{% style %}
+  /* ---- Per-instance design tokens ---- */
+  #FaqAccordion-{{ sid }} {
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --fa-bg: {{ s.color_bg }};
+    --fa-ink: {{ s.color_heading }};
+    --fa-muted: {{ s.color_label }};
+    --fa-q: {{ s.color_question }};
+    --fa-a: {{ s.color_answer }};
+    --fa-icon: {{ s.color_icon }};
+    --fa-hairline: {{ s.color_hairline }};
+    --fa-btn-ink: {{ s.button_color }};
+    --fa-heading-size: clamp({{ s.heading_size_m }}px, 4vw, {{ s.heading_size }}px);
+    --fa-q-size: clamp({{ s.question_size_m }}px, 2vw, {{ s.question_size }}px);
+    --fa-a-size: {{ s.answer_size }}px;
+    --fa-row-pad: {{ s.row_spacing }}px;
+    --fa-btn-speed: {{ s.button_speed }}s;
+    --fa-btn-dir: {{ btn_dir }};
+
+    position: relative;
+    overflow: hidden;
+    background-color: var(--fa-bg);
+    color: var(--fa-a);
+    padding-top: {{ s.pad_top }}px;
+    padding-bottom: {{ s.pad_bottom }}px;
+  }
+
+  #FaqAccordion-{{ sid }} .fa-container {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ---- Header ---- */
+  #FaqAccordion-{{ sid }} .fa-header {
+    margin-bottom: 56px;
+    text-align: {{ s.align }};
+  }
+  #FaqAccordion-{{ sid }} .fa-label {
+    display: block;
+    margin: 0 0 20px;
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--fa-muted);
+  }
+  #FaqAccordion-{{ sid }} .fa-heading {
+    margin: 0;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: var(--fa-heading-size);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    color: var(--fa-ink);
+  }
+  #FaqAccordion-{{ sid }} .fa-intro {
+    max-width: 58ch;
+    margin: 20px 0 0;
+    font-size: calc(var(--fa-a-size) + 1px);
+    line-height: 1.7;
+  }
+  #FaqAccordion-{{ sid }} .fa-intro p { margin: 0 0 0.6em; }
+  #FaqAccordion-{{ sid }} .fa-intro p:last-child { margin-bottom: 0; }
+  {% if s.align == 'center' %}
+  #FaqAccordion-{{ sid }} .fa-intro { margin-left: auto; margin-right: auto; }
+  {% endif %}
+
+  /* ---- Accordion rows ---- */
+  #FaqAccordion-{{ sid }} .fa-item {
+    border-top: 1px solid var(--fa-hairline);
+  }
+  #FaqAccordion-{{ sid }} .fa-item:last-of-type {
+    border-bottom: 1px solid var(--fa-hairline);
+  }
+  #FaqAccordion-{{ sid }} .fa-q {
+    margin: 0;
+    font-size: inherit;
+  }
+  #FaqAccordion-{{ sid }} .fa-q__btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    width: 100%;
+    padding: var(--fa-row-pad) 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-weight: 400;
+    font-size: var(--fa-q-size);
+    line-height: 1.35;
+    color: var(--fa-q);
+  }
+  #FaqAccordion-{{ sid }} .fa-q__btn:focus-visible {
+    outline: 1px solid var(--fa-q);
+    outline-offset: 4px;
+  }
+
+  /* Thin plus icon drawn from two hairlines; rotates 45° to an ×.
+     Chevron variant rotates 180°. */
+  #FaqAccordion-{{ sid }} .fa-icon {
+    position: relative;
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    transition: transform 500ms var(--ease);
+  }
+  #FaqAccordion-{{ sid }} .fa-icon--plus::before,
+  #FaqAccordion-{{ sid }} .fa-icon--plus::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background-color: var(--fa-icon);
+  }
+  #FaqAccordion-{{ sid }} .fa-icon--plus::after {
+    transform: rotate(90deg);
+  }
+  #FaqAccordion-{{ sid }} .fa-icon--chevron::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 9px;
+    height: 9px;
+    border-right: 1px solid var(--fa-icon);
+    border-bottom: 1px solid var(--fa-icon);
+    transform: rotate(45deg);
+  }
+  #FaqAccordion-{{ sid }} .fa-q__btn[aria-expanded='true'] .fa-icon--plus {
+    transform: rotate(45deg);
+  }
+  #FaqAccordion-{{ sid }} .fa-q__btn[aria-expanded='true'] .fa-icon--chevron {
+    transform: rotate(180deg);
+  }
+
+  /* Panels: fully open before JS runs. Once the root has
+     data-faq-ready, closed panels collapse via 0fr and open ones
+     expand via 1fr — a pure CSS height transition. */
+  #FaqAccordion-{{ sid }} .fa-panel {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 500ms var(--ease);
+  }
+  #FaqAccordion-{{ sid }} .fa-panel__clip {
+    overflow: hidden;
+  }
+  #FaqAccordion-{{ sid }}[data-faq-ready] .fa-item:not(.fa-item--open) .fa-panel {
+    grid-template-rows: 0fr;
+  }
+  #FaqAccordion-{{ sid }}[data-faq-ready] .fa-item:not(.fa-item--open) .fa-panel__clip {
+    visibility: hidden;
+    transition: visibility 500ms;
+  }
+  #FaqAccordion-{{ sid }} .fa-answer {
+    padding: 4px 48px calc(var(--fa-row-pad) + 4px) 0;
+    font-size: var(--fa-a-size);
+    line-height: 1.75;
+    color: var(--fa-a);
+  }
+  #FaqAccordion-{{ sid }} .fa-answer p { margin: 0 0 0.6em; }
+  #FaqAccordion-{{ sid }} .fa-answer p:last-child { margin-bottom: 0; }
+  #FaqAccordion-{{ sid }} .fa-answer a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  #FaqAccordion-{{ sid }} .fa-answer a:focus-visible {
+    outline: 1px solid var(--fa-a);
+    outline-offset: 2px;
+  }
+
+  /* ---- Scroll entrance (one-shot fade-up, gated on the fa-anim
+         class JS adds pre-paint, so no-JS visits see everything) ---- */
+  #FaqAccordion-{{ sid }}.fa-anim .fa-item {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 700ms var(--ease), transform 700ms var(--ease);
+    transition-delay: var(--fa-delay, 0ms);
+  }
+  #FaqAccordion-{{ sid }}.fa-anim .fa-item.fa-item--in {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* ---- Closing line + marquee button (shared pattern) ---- */
+  #FaqAccordion-{{ sid }} .fa-closing {
+    margin: 56px 0 0;
+    text-align: center;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-size: calc(var(--fa-q-size) * 0.9);
+    color: var(--fa-q);
+  }
+  #FaqAccordion-{{ sid }} .fa-btnrow {
+    margin-top: 28px;
+    text-align: center;
+  }
+  #FaqAccordion-{{ sid }} .fa-btn {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    padding: 15px 36px;
+    border: 1px solid var(--fa-btn-ink);
+    border-radius: 999px;
+    background: transparent;
+    font-family: var(--font-body-family, 'Helvetica Neue', Arial, sans-serif);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--fa-btn-ink);
+  }
+  #FaqAccordion-{{ sid }} .fa-btn:focus-visible {
+    outline: 1px solid var(--fa-btn-ink);
+    outline-offset: 3px;
+  }
+  #FaqAccordion-{{ sid }} .fa-btn__static {
+    display: block;
+    white-space: nowrap;
+    transition: opacity 400ms var(--ease);
+  }
+  #FaqAccordion-{{ sid }} .fa-btn__track {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    display: flex;
+    gap: 2.5em;
+    width: max-content;
+    opacity: 0;
+    transform: translate(0, -50%);
+    white-space: nowrap;
+    animation: fa-btn-marquee var(--fa-btn-speed) linear infinite;
+    animation-play-state: paused;
+    animation-direction: var(--fa-btn-dir);
+    transition: opacity 400ms var(--ease);
+    pointer-events: none;
+  }
+  #FaqAccordion-{{ sid }} .fa-btn[data-ready]:hover .fa-btn__static,
+  #FaqAccordion-{{ sid }} .fa-btn[data-ready]:focus-visible .fa-btn__static {
+    opacity: 0;
+  }
+  #FaqAccordion-{{ sid }} .fa-btn[data-ready]:hover .fa-btn__track,
+  #FaqAccordion-{{ sid }} .fa-btn[data-ready]:focus-visible .fa-btn__track {
+    opacity: 1;
+    animation-play-state: running;
+  }
+  @keyframes fa-btn-marquee {
+    from { transform: translate(0, -50%); }
+    to { transform: translate(calc(-1 * var(--marquee-loop, 200px)), -50%); }
+  }
+
+  /* ---- Decorative illustration blocks ---- */
+  #FaqAccordion-{{ sid }} .fa-illo {
+    position: absolute;
+    z-index: 0;
+    width: var(--illo-size);
+    opacity: var(--illo-o);
+    pointer-events: none;
+  }
+  #FaqAccordion-{{ sid }} .fa-illo--above { z-index: 2; }
+  #FaqAccordion-{{ sid }} .fa-illo img {
+    width: 100%;
+    height: auto;
+    transform: rotate(var(--illo-rot));
+  }
+  #FaqAccordion-{{ sid }} .fa-illo--top-left { top: calc(4% + var(--illo-y)); left: calc(4% + var(--illo-x)); }
+  #FaqAccordion-{{ sid }} .fa-illo--top-right { top: calc(4% + var(--illo-y)); right: calc(4% - var(--illo-x)); }
+  #FaqAccordion-{{ sid }} .fa-illo--beside-heading { top: calc(6% + var(--illo-y)); right: calc(12% - var(--illo-x)); }
+  #FaqAccordion-{{ sid }} .fa-illo--left-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); left: calc(2% + var(--illo-x)); }
+  #FaqAccordion-{{ sid }} .fa-illo--right-center { top: calc(50% - var(--illo-size) / 2 + var(--illo-y)); right: calc(2% - var(--illo-x)); }
+  #FaqAccordion-{{ sid }} .fa-illo--bottom-left { bottom: calc(4% - var(--illo-y)); left: calc(4% + var(--illo-x)); }
+  #FaqAccordion-{{ sid }} .fa-illo--bottom-right { bottom: calc(4% - var(--illo-y)); right: calc(4% - var(--illo-x)); }
+
+  #FaqAccordion-{{ sid }}[data-animate='true'] .fa-illo--float {
+    animation: fa-illo-float var(--illo-float, 8s) ease-in-out infinite;
+  }
+  @keyframes fa-illo-float {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -12px, 0); }
+  }
+
+  /* ---- Responsive ---- */
+  @media (min-width: 750px) {
+    #FaqAccordion-{{ sid }} .fa-container { padding: 0 40px; }
+  }
+  @media (max-width: 749px) {
+    #FaqAccordion-{{ sid }} {
+      padding-top: {{ s.pad_top_m }}px;
+      padding-bottom: {{ s.pad_bottom_m }}px;
+    }
+    #FaqAccordion-{{ sid }} .fa-header { margin-bottom: 36px; }
+    #FaqAccordion-{{ sid }} .fa-answer { padding-right: 24px; }
+    #FaqAccordion-{{ sid }} .fa-illo { display: none; }
+    #FaqAccordion-{{ sid }} .fa-illo--m { display: block; }
+  }
+
+  /* ---- Reduced motion: instant open/close, no entrance fade ---- */
+  @media (prefers-reduced-motion: reduce) {
+    #FaqAccordion-{{ sid }} .fa-panel,
+    #FaqAccordion-{{ sid }} .fa-icon,
+    #FaqAccordion-{{ sid }}[data-faq-ready] .fa-item:not(.fa-item--open) .fa-panel__clip {
+      transition: none;
+    }
+    #FaqAccordion-{{ sid }}.fa-anim .fa-item {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+    #FaqAccordion-{{ sid }} .fa-illo { animation: none !important; }
+    #FaqAccordion-{{ sid }} .fa-btn__track { display: none; }
+    #FaqAccordion-{{ sid }} .fa-btn[data-ready]:hover .fa-btn__static,
+    #FaqAccordion-{{ sid }} .fa-btn[data-ready]:focus-visible .fa-btn__static { opacity: 1; }
+  }
+{% endstyle %}
+
+<div
+  id="FaqAccordion-{{ sid }}"
+  data-faq-accordion
+  data-animate="{{ s.enable_animations }}"
+  data-multiple="{{ s.allow_multiple }}"
+  data-first-open="{{ s.first_open }}"
+  data-stagger="{{ s.stagger }}"
+>
+  {%- for block in section.blocks -%}
+    {%- if block.type == 'illustration' and block.settings.image != blank -%}
+      <div
+        class="fa-illo fa-illo--{{ block.settings.position }}{% if block.settings.show_mobile %} fa-illo--m{% endif %}{% if block.settings.float %} fa-illo--float{% endif %}{% if block.settings.above %} fa-illo--above{% endif %}"
+        style="--illo-size: {{ block.settings.size }}px; --illo-x: {{ block.settings.offset_x }}px; --illo-y: {{ block.settings.offset_y }}px; --illo-rot: {{ block.settings.rotation }}deg; --illo-o: {{ block.settings.opacity | divided_by: 100.0 }}; --illo-float: {{ block.settings.float_speed }}s;"
+        aria-hidden="true"
+        {{ block.shopify_attributes }}
+      >
+        {{ block.settings.image | image_url: width: 560 | image_tag: loading: 'lazy', alt: '', widths: '280, 560', sizes: '280px' }}
+      </div>
+    {%- endif -%}
+  {%- endfor -%}
+
+  <div class="fa-container">
+    {%- if s.show_label or s.heading != blank or s.intro != blank -%}
+      <div class="fa-header">
+        {%- if s.show_label and s.label_text != blank -%}
+          <span class="fa-label">{{ s.label_text | escape }}</span>
+        {%- endif -%}
+        {%- if s.heading != blank -%}
+          <{{ s.heading_tag }} class="fa-heading">{{ s.heading | escape }}</{{ s.heading_tag }}>
+        {%- endif -%}
+        {%- if s.intro != blank -%}
+          <div class="fa-intro">{{ s.intro }}</div>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+
+    <div class="fa-list">
+      {%- assign q_i = 0 -%}
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'question' and block.settings.question != blank -%}
+          {%- liquid
+            assign q_i = q_i | plus: 1
+            assign btn_id = 'FaqBtn-' | append: sid | append: '-' | append: q_i
+            assign panel_id = 'FaqPanel-' | append: sid | append: '-' | append: q_i
+            assign open = false
+            if s.first_open and q_i == 1
+              assign open = true
+            endif
+          -%}
+          <div class="fa-item{% if open %} fa-item--open{% endif %}" data-item {{ block.shopify_attributes }}>
+            <h3 class="fa-q">
+              <button
+                type="button"
+                id="{{ btn_id }}"
+                class="fa-q__btn"
+                aria-expanded="{{ open }}"
+                aria-controls="{{ panel_id }}"
+                data-toggle
+              >
+                <span>{{ block.settings.question | escape }}</span>
+                <span class="fa-icon fa-icon--{{ s.icon_style }}" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div id="{{ panel_id }}" class="fa-panel" role="region" aria-labelledby="{{ btn_id }}">
+              <div class="fa-panel__clip">
+                <div class="fa-answer">{{ block.settings.answer }}</div>
+              </div>
+            </div>
+          </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+
+    {%- if s.closing_line != blank -%}
+      <p class="fa-closing">{{ s.closing_line | escape }}</p>
+    {%- endif -%}
+
+    {%- if s.show_button and s.button_label != blank -%}
+      <div class="fa-btnrow">
+        <a class="fa-btn" href="{{ s.button_link | default: '#' }}" data-marquee>
+          <span class="fa-btn__static">{{ s.button_label | escape }}</span>
+          <span class="fa-btn__track" aria-hidden="true" data-marquee-track>
+            <span data-marquee-copy>{{ s.button_label | escape }}</span>
+          </span>
+        </a>
+      </div>
+    {%- endif -%}
+  </div>
+</div>
+
+{%- if s.seo_jsonld -%}
+  {%- comment -%} FAQPage structured data built from the question blocks {%- endcomment -%}
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {%- assign printed = 0 -%}
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'question' and block.settings.question != blank -%}
+            {%- if printed > 0 -%},{%- endif -%}
+            {%- assign printed = printed | plus: 1 -%}
+            {
+              "@type": "Question",
+              "name": {{ block.settings.question | json }},
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": {{ block.settings.answer | json }}
+              }
+            }
+          {%- endif -%}
+        {%- endfor -%}
+      ]
+    }
+  </script>
+{%- endif -%}
+
+<script>
+  (function () {
+    'use strict';
+
+    /* Shared marquee-button builder (see about-hero for the pattern) */
+    function buildMarquee(btn) {
+      if (!btn) return null;
+      var track = btn.querySelector('[data-marquee-track]');
+      var copy = btn.querySelector('[data-marquee-copy]');
+      if (!track || !copy) return null;
+      function build() {
+        var clones = track.querySelectorAll('[data-clone]');
+        for (var i = 0; i < clones.length; i++) track.removeChild(clones[i]);
+        var gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+        var unit = copy.getBoundingClientRect().width + gap;
+        if (unit <= gap) return;
+        var needed = Math.ceil((btn.clientWidth + unit) / unit) + 1;
+        for (var j = 0; j < needed; j++) {
+          var c = copy.cloneNode(true);
+          c.setAttribute('data-clone', '');
+          track.appendChild(c);
+        }
+        btn.style.setProperty('--marquee-loop', unit + 'px');
+        btn.setAttribute('data-ready', '');
+      }
+      build();
+      return build;
+    }
+
+    function initFaqAccordion(root) {
+      if (!root || root.dataset.init === 'true') return;
+      root.dataset.init = 'true';
+
+      var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
+      var items = Array.prototype.slice.call(root.querySelectorAll('[data-item]'));
+      var allowMultiple = root.dataset.multiple === 'true';
+
+      /* ---- Accordion. Collapsing is enabled only now, so a no-JS
+         visit reads every answer. ---- */
+      root.setAttribute('data-faq-ready', '');
+
+      function setOpen(item, open) {
+        var btn = item.querySelector('[data-toggle]');
+        item.classList.toggle('fa-item--open', open);
+        if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      items.forEach(function (item) {
+        var btn = item.querySelector('[data-toggle]');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var opening = !item.classList.contains('fa-item--open');
+          if (opening && !allowMultiple) {
+            items.forEach(function (other) {
+              if (other !== item) setOpen(other, false);
+            });
+          }
+          setOpen(item, opening);
+        });
+      });
+
+      /* ---- Scroll entrance: one-shot fade-up with a small stagger
+         within each IntersectionObserver batch. The fa-anim class is
+         added pre-paint by this inline script; skipped when
+         animations are off or reduced motion is set. ---- */
+      var io = null;
+      if (
+        root.dataset.animate === 'true' &&
+        !prm.matches &&
+        'IntersectionObserver' in window &&
+        items.length
+      ) {
+        var stagger = parseInt(root.dataset.stagger, 10) || 0;
+        root.classList.add('fa-anim');
+        io = new IntersectionObserver(
+          function (entries) {
+            var batch = 0;
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              entry.target.style.setProperty('--fa-delay', batch * stagger + 'ms');
+              entry.target.classList.add('fa-item--in');
+              io.unobserve(entry.target);
+              batch++;
+            });
+          },
+          { rootMargin: '0px 0px -8% 0px' }
+        );
+        items.forEach(function (item) { io.observe(item); });
+      }
+
+      var rebuildMarquee = buildMarquee(root.querySelector('[data-marquee]'));
+      var resizeTimer = null;
+      function onResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+          if (rebuildMarquee) rebuildMarquee();
+        }, 150);
+      }
+      window.addEventListener('resize', onResize);
+
+      function onMotionChange() {
+        if (prm.matches) root.classList.remove('fa-anim');
+      }
+      if (prm.addEventListener) prm.addEventListener('change', onMotionChange);
+
+      root.__teardown = function () {
+        if (io) io.disconnect();
+        window.removeEventListener('resize', onResize);
+        if (prm.removeEventListener) prm.removeEventListener('change', onMotionChange);
+      };
+    }
+
+    if (!window.__faqAccordionReady) {
+      window.__faqAccordionReady = true;
+      document.addEventListener('shopify:section:load', function (event) {
+        var el = event.target.querySelector('[data-faq-accordion]');
+        if (el) initFaqAccordion(el);
+      });
+      document.addEventListener('shopify:section:unload', function (event) {
+        var el = event.target.querySelector('[data-faq-accordion]');
+        if (el && el.__teardown) el.__teardown();
+      });
+    }
+    initFaqAccordion(document.getElementById('FaqAccordion-{{ sid }}'));
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "FAQ accordion",
+  "tag": "section",
+  "class": "section-faq-accordion",
+  "max_blocks": 24,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_label",
+      "label": "Show micro-label",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "label_text",
+      "label": "Micro-label",
+      "default": "GOOD TO KNOW"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Questions, answered"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Intro paragraph",
+      "info": "Optional. Leave empty to hide."
+    },
+    {
+      "type": "select",
+      "id": "align",
+      "label": "Header alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "header",
+      "content": "Accordion behavior"
+    },
+    {
+      "type": "checkbox",
+      "id": "allow_multiple",
+      "label": "Allow multiple open",
+      "default": false,
+      "info": "Off: opening one question closes the others."
+    },
+    {
+      "type": "checkbox",
+      "id": "first_open",
+      "label": "First question open by default",
+      "default": false
+    },
+    {
+      "type": "select",
+      "id": "icon_style",
+      "label": "Icon style",
+      "options": [
+        { "value": "plus", "label": "Plus" },
+        { "value": "chevron", "label": "Chevron" }
+      ],
+      "default": "plus"
+    },
+    {
+      "type": "header",
+      "content": "Typography"
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag",
+      "options": [
+        { "value": "h1", "label": "H1" },
+        { "value": "h2", "label": "H2" },
+        { "value": "h3", "label": "H3" }
+      ],
+      "default": "h2"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size — desktop",
+      "min": 24,
+      "max": 72,
+      "step": 2,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "heading_size_m",
+      "label": "Heading size — mobile",
+      "min": 20,
+      "max": 48,
+      "step": 2,
+      "unit": "px",
+      "default": 28
+    },
+    {
+      "type": "range",
+      "id": "question_size",
+      "label": "Question size — desktop",
+      "min": 16,
+      "max": 26,
+      "step": 1,
+      "unit": "px",
+      "default": 20
+    },
+    {
+      "type": "range",
+      "id": "question_size_m",
+      "label": "Question size — mobile",
+      "min": 14,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 17
+    },
+    {
+      "type": "range",
+      "id": "answer_size",
+      "label": "Answer size",
+      "min": 12,
+      "max": 20,
+      "step": 1,
+      "unit": "px",
+      "default": 15
+    },
+    {
+      "type": "range",
+      "id": "row_spacing",
+      "label": "Row spacing",
+      "min": 12,
+      "max": 48,
+      "step": 2,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "color_bg",
+      "label": "Background",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color",
+      "id": "color_heading",
+      "label": "Heading",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "color",
+      "id": "color_label",
+      "label": "Micro-label",
+      "default": "#8A7566"
+    },
+    {
+      "type": "color",
+      "id": "color_question",
+      "label": "Questions",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "color",
+      "id": "color_answer",
+      "label": "Answers",
+      "default": "#5C4A3D"
+    },
+    {
+      "type": "color",
+      "id": "color_icon",
+      "label": "Icon",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "color",
+      "id": "color_hairline",
+      "label": "Hairlines",
+      "default": "#E3D7C3"
+    },
+    {
+      "type": "header",
+      "content": "Animation"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_animations",
+      "label": "Enable animations",
+      "default": true,
+      "info": "Rows fade up gently as they enter. Nothing else — restraint is the design."
+    },
+    {
+      "type": "range",
+      "id": "stagger",
+      "label": "Stagger between rows",
+      "min": 0,
+      "max": 200,
+      "step": 10,
+      "unit": "ms",
+      "default": 80
+    },
+    {
+      "type": "header",
+      "content": "SEO"
+    },
+    {
+      "type": "checkbox",
+      "id": "seo_jsonld",
+      "label": "Output FAQ structured data (JSON-LD)",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Closing"
+    },
+    {
+      "type": "text",
+      "id": "closing_line",
+      "label": "Closing line",
+      "default": "Still curious? We answer every note ourselves.",
+      "info": "Leave empty to hide."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show button",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "CONTACT US"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link"
+    },
+    {
+      "type": "select",
+      "id": "button_direction",
+      "label": "Button marquee direction",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "button_speed",
+      "label": "Button marquee speed",
+      "min": 2,
+      "max": 12,
+      "step": 0.5,
+      "unit": "s",
+      "default": 6
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button border and text",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "header",
+      "content": "Spacing"
+    },
+    {
+      "type": "range",
+      "id": "pad_top",
+      "label": "Top padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 112
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom",
+      "label": "Bottom padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 112
+    },
+    {
+      "type": "range",
+      "id": "pad_top_m",
+      "label": "Top padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "pad_bottom_m",
+      "label": "Bottom padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    }
+  ],
+  "blocks": [
+    {
+      "type": "question",
+      "name": "Question",
+      "settings": [
+        {
+          "type": "text",
+          "id": "question",
+          "label": "Question",
+          "default": "Where are your pieces made?"
+        },
+        {
+          "type": "richtext",
+          "id": "answer",
+          "label": "Answer",
+          "default": "<p>A short, calm answer. Links are welcome here.</p>"
+        }
+      ]
+    },
+    {
+      "type": "illustration",
+      "name": "Illustration",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image",
+          "info": "Transparent PNG brand element. Decorative only."
+        },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "options": [
+            { "value": "top-left", "label": "Top left" },
+            { "value": "top-right", "label": "Top right" },
+            { "value": "beside-heading", "label": "Beside heading" },
+            { "value": "left-center", "label": "Left of content" },
+            { "value": "right-center", "label": "Right of content" },
+            { "value": "bottom-left", "label": "Bottom left" },
+            { "value": "bottom-right", "label": "Bottom right" }
+          ],
+          "default": "top-right"
+        },
+        {
+          "type": "range",
+          "id": "offset_x",
+          "label": "Offset X",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "offset_y",
+          "label": "Offset Y",
+          "min": -120,
+          "max": 120,
+          "step": 4,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "size",
+          "label": "Size",
+          "min": 40,
+          "max": 280,
+          "step": 4,
+          "unit": "px",
+          "default": 120
+        },
+        {
+          "type": "range",
+          "id": "rotation",
+          "label": "Rotation",
+          "min": -30,
+          "max": 30,
+          "step": 1,
+          "unit": "deg",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "opacity",
+          "label": "Opacity",
+          "min": 10,
+          "max": 100,
+          "step": 5,
+          "unit": "%",
+          "default": 100
+        },
+        {
+          "type": "checkbox",
+          "id": "show_mobile",
+          "label": "Show on mobile",
+          "default": false
+        },
+        {
+          "type": "checkbox",
+          "id": "float",
+          "label": "Slow float animation",
+          "default": false
+        },
+        {
+          "type": "range",
+          "id": "float_speed",
+          "label": "Float duration",
+          "min": 6,
+          "max": 10,
+          "step": 0.5,
+          "unit": "s",
+          "default": 8
+        },
+        {
+          "type": "checkbox",
+          "id": "above",
+          "label": "Place above content",
+          "default": false
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "FAQ accordion",
+      "blocks": [
+        { "type": "question" },
+        { "type": "question" },
+        { "type": "question" }
+      ]
+    }
+  ]
+}
+{% endschema %}
