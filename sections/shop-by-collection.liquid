@@ -1,0 +1,1100 @@
+{% comment %}
+  ------------------------------------------------------------------
+  Shop by Collection
+  ------------------------------------------------------------------
+  Editorial collection slider: serif heading with a configurable icon
+  on the left, a pill-shaped marquee button on the right, and a
+  scroll-snap product slider below. Design reference: the "Pastài
+  Collection" section on apinistudio.com.
+
+  Standalone Online Store 2.0 section — markup, CSS and JS all live
+  in this file. Every rule is scoped to the section id so multiple
+  instances (each pointing at a different collection) can sit on the
+  same page with different settings. JS initializes per instance and
+  re-initializes on shopify:section:load for the theme editor.
+
+  File map: HEADER / ICON MODES / BUTTON MARQUEE / SLIDER / CARDS /
+  RESPONSIVE — each appears as a banner in the CSS and again where
+  the matching markup is rendered.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+  assign collection = s.collection
+
+  assign has_products = false
+  if collection != blank and collection.products_count > 0
+    assign has_products = true
+  endif
+
+  comment
+    Heading falls back to the collection title, then to a generic
+    label so the editor preview is never blank.
+  endcomment
+  assign heading_text = s.heading
+  if heading_text == blank and collection != blank
+    assign heading_text = collection.title
+  endif
+  if heading_text == blank
+    assign heading_text = 'Shop by Collection'
+  endif
+
+  comment
+    Button link falls back to the selected collection, then to the
+    catalog so the pill is never a dead link.
+  endcomment
+  assign button_url = s.button_link
+  if button_url == blank and collection != blank
+    assign button_url = collection.url
+  endif
+  if button_url == blank
+    assign button_url = routes.all_products_collection_url
+  endif
+
+  comment
+    ICON MODES — resolve which icon renders. Custom mode without an
+    upload falls back to the default arrow instead of breaking.
+  endcomment
+  assign icon_mode = s.icon_mode
+  if icon_mode == 'custom' and s.custom_icon == blank
+    assign icon_mode = 'default'
+  endif
+
+  case s.image_ratio
+    when 'square'
+      assign card_ratio = '1 / 1'
+    when 'portrait'
+      assign card_ratio = '4 / 5'
+    else
+      comment
+        "Natural" still needs a base ratio for placeholders and
+        image-less products; real cards override it per card with the
+        image's intrinsic ratio so space is reserved before load.
+      endcomment
+      assign card_ratio = '1 / 1'
+  endcase
+
+  comment
+    sizes reflects the cards-per-view math per breakpoint (viewport
+    minus page padding, divided by visible cards).
+  endcomment
+  assign sizes_attr = '(min-width: 990px) calc((100vw - 96px) / ' | append: s.cards_desktop | append: '), (min-width: 750px) calc((100vw - 64px) / ' | append: s.cards_tablet | append: '), calc((100vw - 40px) / ' | append: s.cards_mobile | append: ')'
+
+  assign ph_count = s.cards_desktop | plus: 2
+-%}
+
+{%- if has_products or request.design_mode -%}
+
+{%- capture icon_arrow_right -%}
+<svg class="sbc-icon__svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="M2.5 16h26M21 8.5l7.5 7.5L21 23.5"/></svg>
+{%- endcapture -%}
+
+{% style %}
+  /* ---- Per-instance design tokens (scoped by section id) ---- */
+  #ShopByCollection-{{ sid }} {
+    --sbc-bg: {{ s.bg_color }};
+    --sbc-heading-color: {{ s.heading_color }};
+    --sbc-icon-color: {{ s.icon_color }};
+    --sbc-icon-size: {{ s.icon_size }}px;
+    --sbc-btn-color: {{ s.button_color }};
+    --sbc-marquee-speed: {{ s.marquee_speed }}s;
+    --sbc-marquee-dir: {% if s.marquee_direction == 'right' %}reverse{% else %}normal{% endif %};
+    --sbc-card-text: {{ s.card_text_color }};
+    --sbc-wish-bg: {{ s.wishlist_bg }};
+    --sbc-wish-icon: {{ s.wishlist_icon_color }};
+    --sbc-arrow-color: {{ s.arrow_color }};
+    --sbc-gap: {{ s.card_gap }}px;
+    --sbc-ratio: {{ card_ratio }};
+    --sbc-cpv-desktop: {{ s.cards_desktop }};
+    --sbc-cpv-tablet: {{ s.cards_tablet }};
+    --sbc-cpv-mobile: {{ s.cards_mobile }};
+
+    /* Mobile-first: overridden in the RESPONSIVE block below */
+    --sbc-cpv: var(--sbc-cpv-mobile);
+    --sbc-pad-x: 20px;
+
+    background-color: var(--sbc-bg);
+    padding-top: {{ s.padding_top }}px;
+    padding-bottom: {{ s.padding_bottom }}px;
+    font-family: var(--font-body-family, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif);
+  }
+
+  /* ==================================================================
+     HEADER — icon + serif heading left, pill button right.
+     Premium through restraint: whitespace only, no dividers/shadows.
+     ================================================================== */
+  #ShopByCollection-{{ sid }} .sbc-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding-inline: var(--sbc-pad-x);
+    margin-bottom: 32px;
+  }
+  #ShopByCollection-{{ sid }} .sbc-heading-row {
+    display: flex;
+    align-items: baseline;
+    gap: clamp(12px, 2vw, 26px);
+    min-width: 0;
+  }
+  #ShopByCollection-{{ sid }} .sbc-heading {
+    margin: 0;
+    font-family: var(--font-heading-family, Georgia, 'Palatino Linotype', 'Times New Roman', serif);
+    font-size: clamp({{ s.heading_size_mobile }}px, 4.5vw, {{ s.heading_size_desktop }}px);
+    font-weight: 400;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: var(--sbc-heading-color);
+    overflow-wrap: break-word;
+    min-width: 0;
+  }
+
+  /* ==================================================================
+     ICON MODES — svg icons inherit the icon color via currentColor;
+     a custom upload is sized by the same --sbc-icon-size token.
+     ================================================================== */
+  #ShopByCollection-{{ sid }} .sbc-icon {
+    flex: 0 0 auto;
+    color: var(--sbc-icon-color);
+  }
+  #ShopByCollection-{{ sid }} .sbc-icon__svg {
+    display: block;
+    width: var(--sbc-icon-size);
+    height: var(--sbc-icon-size);
+  }
+  #ShopByCollection-{{ sid }} .sbc-icon__img {
+    display: block;
+    width: var(--sbc-icon-size);
+    height: auto;
+  }
+
+  /* ==================================================================
+     BUTTON MARQUEE — same construction as the Split Hero button but
+     fully self-contained and namespaced (sbc-*), so this file never
+     depends on the hero's CSS and the two can share a page.
+
+     A single static label sits in normal flow and sets the pill
+     width. The marquee is an absolutely-positioned overlay holding
+     four identical label copies in a max-content track; shifting the
+     track by exactly -25% (= one copy, padding included) makes the
+     loop point invisible at any label length. Paused by default,
+     runs on hover / :focus-visible, dead under reduced motion.
+     ================================================================== */
+  #ShopByCollection-{{ sid }} .sbc-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex: 0 0 auto;
+    max-width: 100%;
+    padding: 15px 34px;
+    border: 1px solid var(--sbc-btn-color);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--sbc-btn-color);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #ShopByCollection-{{ sid }} .sbc-button:focus-visible {
+    outline: 2px solid var(--sbc-btn-color);
+    outline-offset: 3px;
+  }
+  #ShopByCollection-{{ sid }} .sbc-button__static {
+    display: block;
+    transition: opacity 0.2s ease;
+  }
+  #ShopByCollection-{{ sid }} .sbc-button__marquee {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  #ShopByCollection-{{ sid }} .sbc-button__marquee-track {
+    display: flex;
+    width: max-content;
+    animation: sbc-marquee-{{ sid }} var(--sbc-marquee-speed) linear infinite;
+    animation-play-state: paused;
+    animation-direction: var(--sbc-marquee-dir);
+  }
+  #ShopByCollection-{{ sid }} .sbc-button__marquee-item {
+    display: block;
+    white-space: nowrap;
+    padding-inline-end: 2.5em;
+  }
+  @keyframes sbc-marquee-{{ sid }} {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-25%); }
+  }
+  #ShopByCollection-{{ sid }} .sbc-button:hover .sbc-button__static,
+  #ShopByCollection-{{ sid }} .sbc-button:focus-visible .sbc-button__static {
+    opacity: 0;
+  }
+  #ShopByCollection-{{ sid }} .sbc-button:hover .sbc-button__marquee,
+  #ShopByCollection-{{ sid }} .sbc-button:focus-visible .sbc-button__marquee {
+    opacity: 1;
+  }
+  #ShopByCollection-{{ sid }} .sbc-button:hover .sbc-button__marquee-track,
+  #ShopByCollection-{{ sid }} .sbc-button:focus-visible .sbc-button__marquee-track {
+    animation-play-state: running;
+  }
+
+  /* ==================================================================
+     SLIDER — native scroll-snap does the scrolling; JS only drives
+     the desktop arrows and their end-state disabling. The UL itself
+     is the scroll container (focusable for keyboard scrolling), with
+     an ::after spacer guaranteeing the trailing page gutter across
+     browsers that drop scroll-container end padding.
+     ================================================================== */
+  #ShopByCollection-{{ sid }} .sbc-slider {
+    position: relative;
+  }
+  #ShopByCollection-{{ sid }} .sbc-track {
+    display: flex;
+    gap: var(--sbc-gap);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    padding-inline-start: var(--sbc-pad-x);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline-start: var(--sbc-pad-x);
+    /* Hide the scrollbar, keep the area touch/keyboard scrollable */
+    scrollbar-width: none;
+  }
+  #ShopByCollection-{{ sid }} .sbc-track::-webkit-scrollbar {
+    display: none;
+  }
+  #ShopByCollection-{{ sid }} .sbc-track::after {
+    content: '';
+    flex: 0 0 max(calc(var(--sbc-pad-x) - var(--sbc-gap)), 1px);
+  }
+  #ShopByCollection-{{ sid }} .sbc-track:focus-visible {
+    outline: 2px solid var(--sbc-heading-color);
+    outline-offset: -2px;
+  }
+
+  #ShopByCollection-{{ sid }} .sbc-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    display: none; /* desktop only — see RESPONSIVE */
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--sbc-arrow-color);
+    border-radius: 50%;
+    background-color: var(--sbc-bg);
+    color: var(--sbc-arrow-color);
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+  }
+  #ShopByCollection-{{ sid }} .sbc-arrow--prev { left: 14px; }
+  #ShopByCollection-{{ sid }} .sbc-arrow--next { right: 14px; }
+  #ShopByCollection-{{ sid }} .sbc-arrow[disabled] {
+    opacity: 0.3;
+    cursor: default;
+  }
+  #ShopByCollection-{{ sid }} .sbc-arrow:focus-visible {
+    outline: 2px solid var(--sbc-arrow-color);
+    outline-offset: 2px;
+  }
+  #ShopByCollection-{{ sid }} .sbc-arrow svg {
+    width: 18px;
+    height: 18px;
+  }
+  /* JS adds sbc--static when everything fits — arrows disappear */
+  #ShopByCollection-{{ sid }}.sbc--static .sbc-arrow {
+    display: none;
+  }
+
+  /* ==================================================================
+     CARDS — images float directly on the section background. No
+     borders, shadows or hover zooms; the only motion is the soft
+     crossfade to the second image. aspect-ratio reserves the image
+     box before load so nothing shifts.
+     ================================================================== */
+  #ShopByCollection-{{ sid }} .sbc-card {
+    position: relative;
+    flex: 0 0 calc((100% - (var(--sbc-cpv) - 1) * var(--sbc-gap)) / var(--sbc-cpv));
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+  #ShopByCollection-{{ sid }} .sbc-card__link {
+    display: block;
+    color: var(--sbc-card-text);
+    text-decoration: none;
+  }
+  #ShopByCollection-{{ sid }} .sbc-card__link:focus-visible {
+    outline: 2px solid var(--sbc-card-text);
+    outline-offset: 3px;
+  }
+  #ShopByCollection-{{ sid }} .sbc-card__media {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: var(--sbc-ratio);
+    background-color: rgba(0, 0, 0, 0.03);
+  }
+  #ShopByCollection-{{ sid }} .sbc-card__media img,
+  #ShopByCollection-{{ sid }} .sbc-card__media svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #ShopByCollection-{{ sid }} .sbc-card__img--hover {
+    opacity: 0;
+    transition: opacity 0.45s ease;
+  }
+  #ShopByCollection-{{ sid }} .sbc-card:hover .sbc-card__img--hover,
+  #ShopByCollection-{{ sid }} .sbc-card__link:focus-visible .sbc-card__img--hover {
+    opacity: 1;
+  }
+
+  #ShopByCollection-{{ sid }} .sbc-card__badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background-color: var(--sbc-bg);
+    color: var(--sbc-card-text);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* Wishlist button lives outside the product link (valid markup)
+     and is absolutely positioned over the image's top-right corner */
+  #ShopByCollection-{{ sid }} .sbc-wishlist-button {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background-color: var(--sbc-wish-bg);
+    color: var(--sbc-wish-icon);
+    cursor: pointer;
+  }
+  #ShopByCollection-{{ sid }} .sbc-wishlist-button svg {
+    width: 16px;
+    height: 16px;
+  }
+  #ShopByCollection-{{ sid }} .sbc-wishlist-button:focus-visible {
+    outline: 2px solid var(--sbc-wish-bg);
+    outline-offset: 2px;
+  }
+
+  /* Card typography: small and quiet, stable across breakpoints */
+  #ShopByCollection-{{ sid }} .sbc-card__info {
+    padding-top: 14px;
+  }
+  #ShopByCollection-{{ sid }} .sbc-card__title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    color: var(--sbc-card-text);
+  }
+  #ShopByCollection-{{ sid }} .sbc-card__price {
+    margin: 4px 0 0;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--sbc-card-text);
+    opacity: 0.7;
+  }
+
+  /* ==================================================================
+     RESPONSIVE — desktop >= 990px, tablet 750-989px, mobile < 750px.
+     Heading scales via clamp(); cards-per-view swaps per breakpoint;
+     card type stays fixed.
+     ================================================================== */
+  @media (min-width: 750px) {
+    #ShopByCollection-{{ sid }} {
+      --sbc-cpv: var(--sbc-cpv-tablet);
+      --sbc-pad-x: 32px;
+    }
+    #ShopByCollection-{{ sid }} .sbc-header {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+      margin-bottom: 40px;
+    }
+  }
+
+  @media (min-width: 990px) {
+    #ShopByCollection-{{ sid }} {
+      --sbc-cpv: var(--sbc-cpv-desktop);
+      --sbc-pad-x: 48px;
+    }
+    #ShopByCollection-{{ sid }} .sbc-header {
+      margin-bottom: 48px;
+    }
+    #ShopByCollection-{{ sid }} .sbc-arrow {
+      display: inline-flex;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Marquee fully disabled: static label stays put on hover/focus */
+    #ShopByCollection-{{ sid }} .sbc-button__marquee {
+      display: none;
+    }
+    #ShopByCollection-{{ sid }} .sbc-button__marquee-track {
+      animation: none;
+    }
+    #ShopByCollection-{{ sid }} .sbc-button:hover .sbc-button__static,
+    #ShopByCollection-{{ sid }} .sbc-button:focus-visible .sbc-button__static {
+      opacity: 1;
+    }
+    #ShopByCollection-{{ sid }} .sbc-card__img--hover,
+    #ShopByCollection-{{ sid }} .sbc-button__static,
+    #ShopByCollection-{{ sid }} .sbc-arrow {
+      transition: none;
+    }
+  }
+{% endstyle %}
+
+<div
+  id="ShopByCollection-{{ sid }}"
+  class="sbc{% if s.color_scheme %} color-{{ s.color_scheme }}{% endif %}"
+  data-shop-by-collection
+>
+  {%- comment -%} ================= HEADER ================= {%- endcomment -%}
+  <div class="sbc-header">
+    <div class="sbc-heading-row">
+      {%- comment -%} ============== ICON MODES ============== {%- endcomment -%}
+      {%- unless icon_mode == 'hidden' -%}
+        <span class="sbc-icon" aria-hidden="true">
+          {%- case icon_mode -%}
+            {%- when 'custom' -%}
+              <img
+                class="sbc-icon__img"
+                src="{{ s.custom_icon | image_url: width: 256 }}"
+                alt=""
+                loading="lazy"
+                {% if s.custom_icon.width > 0 and s.custom_icon.height > 0 %}
+                  width="{{ s.custom_icon.width }}"
+                  height="{{ s.custom_icon.height }}"
+                {% endif %}
+              >
+            {%- when 'library' -%}
+              {%- case s.icon_library -%}
+                {%- when 'arrow_down' -%}
+                  <svg class="sbc-icon__svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="M16 2.5v26M8.5 21 16 28.5 23.5 21"/></svg>
+                {%- when 'plus' -%}
+                  <svg class="sbc-icon__svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="M16 3v26M3 16h26"/></svg>
+                {%- when 'asterisk' -%}
+                  <svg class="sbc-icon__svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="M16 3v26M4.7 9.5l22.6 13M27.3 9.5l-22.6 13"/></svg>
+                {%- when 'star' -%}
+                  <svg class="sbc-icon__svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="M16 2c1.2 7.7 6.3 12.8 14 14-7.7 1.2-12.8 6.3-14 14-1.2-7.7-6.3-12.8-14-14C9.7 14.8 14.8 9.7 16 2Z"/></svg>
+                {%- when 'circle' -%}
+                  <svg class="sbc-icon__svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><circle cx="16" cy="16" r="13.5"/></svg>
+                {%- else -%}
+                  {{ icon_arrow_right }}
+              {%- endcase -%}
+            {%- else -%}
+              {{ icon_arrow_right }}
+          {%- endcase -%}
+        </span>
+      {%- endunless -%}
+
+      <{{ s.heading_tag }} class="sbc-heading">{{ heading_text | escape }}</{{ s.heading_tag }}>
+    </div>
+
+    {%- comment -%} ============= BUTTON MARQUEE ============= {%- endcomment -%}
+    {%- if s.show_button and s.button_label != blank -%}
+      <a class="sbc-button" href="{{ button_url }}">
+        <span class="sbc-button__static">{{ s.button_label | escape }}</span>
+        <span class="sbc-button__marquee" aria-hidden="true">
+          <span class="sbc-button__marquee-track">
+            <span class="sbc-button__marquee-item">{{ s.button_label | escape }}</span>
+            <span class="sbc-button__marquee-item">{{ s.button_label | escape }}</span>
+            <span class="sbc-button__marquee-item">{{ s.button_label | escape }}</span>
+            <span class="sbc-button__marquee-item">{{ s.button_label | escape }}</span>
+          </span>
+        </span>
+      </a>
+    {%- endif -%}
+  </div>
+
+  {%- comment -%} ================= SLIDER ================= {%- endcomment -%}
+  <div class="sbc-slider" role="region" aria-label="{{ heading_text | escape }} products">
+    <ul class="sbc-track" role="list" tabindex="0" data-sbc-scroller>
+      {%- comment -%} ================ CARDS ================ {%- endcomment -%}
+      {%- if has_products -%}
+        {%- for product in collection.products limit: s.max_products -%}
+          {%- liquid
+            assign hover_image = false
+            if s.enable_hover_swap and product.images.size > 1
+              assign hover_image = product.images[1]
+            endif
+          -%}
+          <li
+            class="sbc-card"
+            {% if s.image_ratio == 'natural' and product.featured_image %}
+              style="--sbc-ratio: {{ product.featured_image.aspect_ratio | round: 4 }}"
+            {% endif %}
+          >
+            <a class="sbc-card__link" href="{{ product.url }}">
+              <span class="sbc-card__media">
+                {%- if s.show_sold_out_badge and product.available == false -%}
+                  <span class="sbc-card__badge">Sold out</span>
+                {%- endif -%}
+                {%- if product.featured_image -%}
+                  {{ product.featured_image | image_url: width: 1100 | image_tag: widths: '330, 460, 660, 900, 1100', sizes: sizes_attr, loading: 'lazy', class: 'sbc-card__img sbc-card__img--primary' }}
+                  {%- if hover_image -%}
+                    {{ hover_image | image_url: width: 1100 | image_tag: widths: '330, 460, 660, 900, 1100', sizes: sizes_attr, loading: 'lazy', class: 'sbc-card__img sbc-card__img--hover', alt: '' }}
+                  {%- endif -%}
+                {%- else -%}
+                  {{ 'product-1' | placeholder_svg_tag: 'sbc-card__placeholder' }}
+                {%- endif -%}
+              </span>
+
+              <span class="sbc-card__info">
+                {%- if s.show_title -%}
+                  <h3 class="sbc-card__title">{{ product.title | escape }}</h3>
+                {%- endif -%}
+                {%- if s.show_price -%}
+                  <p class="sbc-card__price">
+                    {%- if product.price_varies -%}
+                      From {{ product.price_min | money }}
+                    {%- else -%}
+                      {{ product.price | money }}
+                    {%- endif -%}
+                  </p>
+                {%- endif -%}
+              </span>
+            </a>
+
+            {%- comment -%}
+              WISHLIST HOOK — purely visual by default; this section
+              ships no wishlist logic. Wishlist apps (or the theme's
+              own wishlist) can bind to `.sbc-wishlist-button` /
+              `[data-product-id]`. If the theme already injects its
+              own wishlist buttons on cards, turn this one off via
+              the "Show wishlist button" setting.
+            {%- endcomment -%}
+            {%- if s.show_wishlist -%}
+              <button
+                type="button"
+                class="sbc-wishlist-button"
+                data-product-id="{{ product.id }}"
+                aria-label="Add {{ product.title | escape }} to wishlist"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="M12 20.2 4.9 12.9a4.7 4.7 0 0 1 0-6.6 4.5 4.5 0 0 1 6.5 0l.6.7.6-.7a4.5 4.5 0 0 1 6.5 0 4.7 4.7 0 0 1 0 6.6Z"/></svg>
+              </button>
+            {%- endif -%}
+          </li>
+        {%- endfor -%}
+      {%- else -%}
+        {%- comment -%}
+          No collection selected (theme editor only — the section
+          renders nothing on the live storefront in this state):
+          placeholder cards so the merchant sees the layout.
+        {%- endcomment -%}
+        {%- for i in (1..ph_count) -%}
+          {%- liquid
+            assign ph_index = forloop.index0 | modulo: 6 | plus: 1
+            assign ph_name = 'product-' | append: ph_index
+          -%}
+          <li class="sbc-card">
+            <a class="sbc-card__link" href="{{ button_url }}" tabindex="-1" aria-hidden="true">
+              <span class="sbc-card__media">
+                {{ ph_name | placeholder_svg_tag: 'sbc-card__placeholder' }}
+              </span>
+              <span class="sbc-card__info">
+                {%- if s.show_title -%}
+                  <h3 class="sbc-card__title">Example product</h3>
+                {%- endif -%}
+                {%- if s.show_price -%}
+                  <p class="sbc-card__price">{{ 2900 | money }}</p>
+                {%- endif -%}
+              </span>
+            </a>
+            {%- if s.show_wishlist -%}
+              <button type="button" class="sbc-wishlist-button" data-product-id="" aria-hidden="true" tabindex="-1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="M12 20.2 4.9 12.9a4.7 4.7 0 0 1 0-6.6 4.5 4.5 0 0 1 6.5 0l.6.7.6-.7a4.5 4.5 0 0 1 6.5 0 4.7 4.7 0 0 1 0 6.6Z"/></svg>
+              </button>
+            {%- endif -%}
+          </li>
+        {%- endfor -%}
+      {%- endif -%}
+    </ul>
+
+    {%- if s.show_arrows -%}
+      <button type="button" class="sbc-arrow sbc-arrow--prev" data-sbc-prev aria-label="Scroll to previous products" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>
+      </button>
+      <button type="button" class="sbc-arrow sbc-arrow--next" data-sbc-next aria-label="Scroll to next products">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg>
+      </button>
+    {%- endif -%}
+  </div>
+</div>
+
+{%- comment -%}
+  SLIDER JS — deliberately minimal: native scroll-snap owns the
+  scrolling; this script only wires the arrow buttons, disables them
+  at the ends, and hides them when nothing overflows. Initializes
+  once per instance (dataset guard) and re-initializes on
+  shopify:section:load so live editing in the theme editor works.
+{%- endcomment -%}
+<script>
+  (function () {
+    'use strict';
+
+    function initShopByCollection(root) {
+      if (!root || root.dataset.sbcInit === 'true') return;
+      root.dataset.sbcInit = 'true';
+
+      var scroller = root.querySelector('[data-sbc-scroller]');
+      if (!scroller) return;
+      var prev = root.querySelector('[data-sbc-prev]');
+      var next = root.querySelector('[data-sbc-next]');
+
+      var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function maxScroll() {
+        return scroller.scrollWidth - scroller.clientWidth;
+      }
+
+      /* One "page" = every fully visible card. Card pitch (width +
+         gap) is measured from the DOM so it always matches the CSS. */
+      function step() {
+        var cards = scroller.querySelectorAll('.sbc-card');
+        if (!cards.length) return scroller.clientWidth;
+        var pitch =
+          cards.length > 1
+            ? cards[1].offsetLeft - cards[0].offsetLeft
+            : cards[0].offsetWidth;
+        if (pitch <= 0) return scroller.clientWidth;
+        var visible = Math.max(1, Math.floor(scroller.clientWidth / pitch));
+        return pitch * visible;
+      }
+
+      function update() {
+        var end = maxScroll();
+        /* abs() keeps the end detection sane in RTL, where
+           scrollLeft runs negative */
+        var x = Math.abs(scroller.scrollLeft);
+        root.classList.toggle('sbc--static', end < 2);
+        if (prev) prev.disabled = x <= 1;
+        if (next) next.disabled = x >= end - 1;
+      }
+
+      var ticking = false;
+      scroller.addEventListener(
+        'scroll',
+        function () {
+          if (ticking) return;
+          ticking = true;
+          requestAnimationFrame(function () {
+            ticking = false;
+            update();
+          });
+        },
+        { passive: true }
+      );
+
+      /* Self-removing so editor re-renders don't pile up listeners */
+      window.addEventListener('resize', function onResize() {
+        if (!root.isConnected) {
+          window.removeEventListener('resize', onResize);
+          return;
+        }
+        update();
+      });
+
+      function scrollByStep(direction) {
+        scroller.scrollBy({
+          left: direction * step(),
+          behavior: reduceMotion ? 'auto' : 'smooth'
+        });
+      }
+      if (prev) prev.addEventListener('click', function () { scrollByStep(-1); });
+      if (next) next.addEventListener('click', function () { scrollByStep(1); });
+
+      update();
+    }
+
+    /* Register the theme editor hook once per page; each instance
+       initializes itself by id, so instances never conflict */
+    if (!window.__shopByCollectionReady) {
+      window.__shopByCollectionReady = true;
+      document.addEventListener('shopify:section:load', function (event) {
+        var el = event.target.querySelector('[data-shop-by-collection]');
+        if (el) initShopByCollection(el);
+      });
+    }
+    initShopByCollection(document.getElementById('ShopByCollection-{{ sid }}'));
+  })();
+</script>
+
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Shop by Collection",
+  "tag": "section",
+  "class": "section-shop-by-collection",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "Collection"
+    },
+    {
+      "type": "collection",
+      "id": "collection",
+      "label": "Collection"
+    },
+    {
+      "type": "range",
+      "id": "max_products",
+      "label": "Maximum products",
+      "min": 4,
+      "max": 24,
+      "step": 1,
+      "default": 8
+    },
+    {
+      "type": "header",
+      "content": "Heading & Icon"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "info": "Leave empty to use the collection title."
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag",
+      "options": [
+        { "value": "h1", "label": "H1" },
+        { "value": "h2", "label": "H2" },
+        { "value": "h3", "label": "H3" }
+      ],
+      "default": "h2",
+      "info": "For SEO structure. Does not change the visual size."
+    },
+    {
+      "type": "range",
+      "id": "heading_size_desktop",
+      "label": "Heading size — desktop",
+      "min": 32,
+      "max": 96,
+      "step": 2,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "heading_size_mobile",
+      "label": "Heading size — mobile",
+      "min": 20,
+      "max": 48,
+      "step": 2,
+      "unit": "px",
+      "default": 32
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Heading color",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "select",
+      "id": "icon_mode",
+      "label": "Icon",
+      "options": [
+        { "value": "default", "label": "Default arrow" },
+        { "value": "library", "label": "Icon library" },
+        { "value": "custom", "label": "Custom upload" },
+        { "value": "hidden", "label": "Hide icon" }
+      ],
+      "default": "default"
+    },
+    {
+      "type": "select",
+      "id": "icon_library",
+      "label": "Icon library choice",
+      "options": [
+        { "value": "arrow_right", "label": "Arrow right" },
+        { "value": "arrow_down", "label": "Arrow down" },
+        { "value": "plus", "label": "Plus" },
+        { "value": "asterisk", "label": "Asterisk" },
+        { "value": "star", "label": "Star" },
+        { "value": "circle", "label": "Circle" }
+      ],
+      "default": "arrow_right",
+      "info": "Used when Icon is set to Icon library."
+    },
+    {
+      "type": "image_picker",
+      "id": "custom_icon",
+      "label": "Custom icon",
+      "info": "Used when Icon is set to Custom upload. Transparent PNG or SVG recommended. Falls back to the default arrow while empty."
+    },
+    {
+      "type": "range",
+      "id": "icon_size",
+      "label": "Icon size",
+      "min": 16,
+      "max": 64,
+      "step": 2,
+      "unit": "px",
+      "default": 32
+    },
+    {
+      "type": "color",
+      "id": "icon_color",
+      "label": "Icon color",
+      "default": "#2B1A12",
+      "info": "Applies to the built-in icons, not custom uploads."
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show button",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "DISCOVER THE COLLECTION"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link",
+      "info": "Leave empty to link to the selected collection."
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button text and border color",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "select",
+      "id": "marquee_direction",
+      "label": "Marquee direction",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left",
+      "info": "The label scrolls on hover. Automatically disabled for visitors who prefer reduced motion."
+    },
+    {
+      "type": "range",
+      "id": "marquee_speed",
+      "label": "Marquee speed",
+      "min": 2,
+      "max": 20,
+      "step": 1,
+      "unit": "s",
+      "default": 6,
+      "info": "Seconds per loop. Higher is slower."
+    },
+    {
+      "type": "header",
+      "content": "Product cards"
+    },
+    {
+      "type": "select",
+      "id": "image_ratio",
+      "label": "Image aspect ratio",
+      "options": [
+        { "value": "square", "label": "Square" },
+        { "value": "portrait", "label": "Portrait (4:5)" },
+        { "value": "natural", "label": "Natural" }
+      ],
+      "default": "portrait"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_title",
+      "label": "Show product title",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_price",
+      "label": "Show price",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_wishlist",
+      "label": "Show wishlist button",
+      "default": true,
+      "info": "Visual only — a wishlist app or the theme's wishlist can hook into it. Turn off if your theme already adds its own."
+    },
+    {
+      "type": "color",
+      "id": "wishlist_bg",
+      "label": "Wishlist circle color",
+      "default": "#93AEBB"
+    },
+    {
+      "type": "color",
+      "id": "wishlist_icon_color",
+      "label": "Wishlist icon color",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_hover_swap",
+      "label": "Show second image on hover",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_sold_out_badge",
+      "label": "Show sold-out badge",
+      "default": false
+    },
+    {
+      "type": "color",
+      "id": "card_text_color",
+      "label": "Card text color",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "header",
+      "content": "Slider"
+    },
+    {
+      "type": "range",
+      "id": "cards_desktop",
+      "label": "Cards per view — desktop",
+      "min": 2,
+      "max": 5,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "cards_tablet",
+      "label": "Cards per view — tablet",
+      "min": 1.5,
+      "max": 4,
+      "step": 0.5,
+      "default": 2.5,
+      "info": "A fraction leaves the next card peeking to signal scrollability."
+    },
+    {
+      "type": "range",
+      "id": "cards_mobile",
+      "label": "Cards per view — mobile",
+      "min": 1,
+      "max": 2.5,
+      "step": 0.1,
+      "default": 1.4
+    },
+    {
+      "type": "checkbox",
+      "id": "show_arrows",
+      "label": "Show desktop arrows",
+      "default": true
+    },
+    {
+      "type": "color",
+      "id": "arrow_color",
+      "label": "Arrow color",
+      "default": "#2B1A12"
+    },
+    {
+      "type": "range",
+      "id": "card_gap",
+      "label": "Gap between cards",
+      "min": 8,
+      "max": 48,
+      "step": 4,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Section background",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "default": "scheme-1",
+      "info": "Only applies in themes that define color schemes. The colors above always take priority."
+    },
+    {
+      "type": "header",
+      "content": "Spacing"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Top padding",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Bottom padding",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    }
+  ],
+  "presets": [
+    {
+      "name": "Shop by Collection"
+    }
+  ]
+}
+{% endschema %}
