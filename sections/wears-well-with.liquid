@@ -47,10 +47,15 @@
     Static row caps at one desktop row; the slider may show everything.
     Skeleton count matches so nothing shifts when real cards land.
   endcomment
+  comment
+    Cards-per-row selects return strings; cast once for arithmetic.
+  endcomment
+  assign cards_desktop_n = s.cards_desktop | plus: 0
+
   assign visible_max = s.products_count
   unless s.enable_slider
-    if visible_max > s.cards_desktop
-      assign visible_max = s.cards_desktop
+    if visible_max > cards_desktop_n
+      assign visible_max = cards_desktop_n
     endif
   endunless
 
@@ -605,19 +610,25 @@
     <li class="www-item www-card">
       <a class="www-card__link" href="#">
         <div class="www-media">
+          {%- comment -%}
+            src is an inert transparent placeholder; JS assigns the real
+            src, srcset and sizes (from data-sizes) before insertion.
+          {%- endcomment -%}
           <img
             class="www-img--a"
+            src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%201%201'%3E%3C/svg%3E"
             alt=""
             loading="lazy"
-            sizes="(min-width: 990px) calc(min(100vw, 1280px) / {{ s.cards_desktop }}), (min-width: 750px) 40vw, 46vw"
+            data-sizes="(min-width: 990px) calc(min(100vw, 1280px) / {{ s.cards_desktop }}), (min-width: 750px) 40vw, 46vw"
           >
           {%- if s.hover_second_image -%}
             <img
               class="www-img--b"
+              src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%201%201'%3E%3C/svg%3E"
               alt=""
               loading="lazy"
               aria-hidden="true"
-              sizes="(min-width: 990px) calc(min(100vw, 1280px) / {{ s.cards_desktop }}), (min-width: 750px) 40vw, 46vw"
+              data-sizes="(min-width: 990px) calc(min(100vw, 1280px) / {{ s.cards_desktop }}), (min-width: 750px) 40vw, 46vw"
             >
           {%- endif -%}
         </div>
@@ -837,14 +848,20 @@
           var imgA = node.querySelector('.www-img--a');
           var imgB = node.querySelector('.www-img--b');
           if (item.image) {
-            if (item.srcset) imgA.srcset = item.srcset;
+            if (item.srcset) {
+              imgA.setAttribute('srcset', item.srcset);
+              imgA.setAttribute('sizes', imgA.getAttribute('data-sizes') || '');
+            }
             imgA.src = item.image;
           } else {
             imgA.remove();
           }
           if (imgB) {
             if (item.image2) {
-              if (item.srcset2) imgB.srcset = item.srcset2;
+              if (item.srcset2) {
+                imgB.setAttribute('srcset', item.srcset2);
+                imgB.setAttribute('sizes', imgB.getAttribute('data-sizes') || '');
+              }
               imgB.src = item.image2;
             } else {
               imgB.remove();
@@ -1146,22 +1163,25 @@
       "default": "square"
     },
     {
-      "type": "range",
+      "type": "select",
       "id": "cards_desktop",
       "label": "Cards per row — desktop",
-      "min": 2,
-      "max": 4,
-      "step": 1,
-      "default": 3
+      "options": [
+        { "value": "2", "label": "2" },
+        { "value": "3", "label": "3" },
+        { "value": "4", "label": "4" }
+      ],
+      "default": "3"
     },
     {
-      "type": "range",
+      "type": "select",
       "id": "cards_tablet",
       "label": "Cards per row — tablet",
-      "min": 2,
-      "max": 3,
-      "step": 1,
-      "default": 3
+      "options": [
+        { "value": "2", "label": "2" },
+        { "value": "3", "label": "3" }
+      ],
+      "default": "3"
     },
     {
       "type": "select",
