@@ -575,7 +575,7 @@
                 {%- else -%}
                   {{ 'product-1' | placeholder_svg_tag: 'sbc-card__placeholder' }}
                 {%- endif -%}
-              </span>
+              </div>
 
               <div class="sbc-card__info">
                 {%- if s.show_title -%}
@@ -590,7 +590,7 @@
                     {%- endif -%}
                   </p>
                 {%- endif -%}
-              </span>
+              </div>
             </a>
 
             {%- comment -%}
@@ -628,7 +628,7 @@
             <a class="sbc-card__link" href="{{ button_url }}" tabindex="-1" aria-hidden="true">
               <div class="sbc-card__media">
                 {{ ph_name | placeholder_svg_tag: 'sbc-card__placeholder' }}
-              </span>
+              </div>
               <div class="sbc-card__info">
                 {%- if s.show_title -%}
                   <h3 class="sbc-card__title">Example product</h3>
@@ -636,7 +636,7 @@
                 {%- if s.show_price -%}
                   <p class="sbc-card__price">{{ 2900 | money }}</p>
                 {%- endif -%}
-              </span>
+              </div>
             </a>
             {%- if s.show_wishlist -%}
               <button type="button" class="sbc-wishlist-button" data-product-id="" aria-hidden="true" tabindex="-1">
