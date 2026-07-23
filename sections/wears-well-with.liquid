@@ -1,0 +1,1445 @@
+{% comment %}
+  ------------------------------------------------------------------
+  Wears Well With — complementary products
+  ------------------------------------------------------------------
+  Standalone Online Store 2.0 section for product templates. Shows a
+  small, quiet row of complementary pieces under the product.
+
+  DATA CHAIN (each layer silent on failure, never an error to shoppers):
+    1. Search & Discovery complementary recommendations, fetched
+       client-side from routes.product_recommendations_url
+    2. Manual fallback product list (curated in the section settings,
+       prices formatted server-side)
+    3. intent=related recommendations — only if the merchant opts in
+    4. Hide the section entirely rather than show something random
+  In the theme editor the section never hides: it keeps the skeleton
+  layout and shows a merchant-only note instead.
+
+  ART DIRECTION GUARDRAILS (deliberate, do not "improve"):
+    - no box shadows anywhere, no border radius, images square-cornered
+    - no card backgrounds or borders — images float on the section tone
+    - no colored/filled buttons, no ratings, no badges, no urgency
+    - transitions 400-700ms with soft easing
+    - whitespace is the primary design material; when in doubt, remove
+
+  All JS is scoped per section instance, re-initializes on
+  shopify:section:load, and never blocks page rendering. No libraries.
+  Skeleton placeholders are sized identically to the final cards, so
+  square / 4:5 ratios produce zero layout shift ("natural" cannot
+  guarantee that by definition and reserves a square instead).
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  case s.aspect_ratio
+    when 'portrait'
+      assign media_ratio = '4 / 5'
+    when 'natural'
+      assign media_ratio = 'auto'
+    else
+      assign media_ratio = '1 / 1'
+  endcase
+
+  comment
+    Static row caps at one desktop row; the slider may show everything.
+    Skeleton count matches so nothing shifts when real cards land.
+  endcomment
+  assign visible_max = s.products_count
+  unless s.enable_slider
+    if visible_max > s.cards_desktop
+      assign visible_max = s.cards_desktop
+    endif
+  endunless
+
+  assign gap_mobile = s.card_gap | divided_by: 2 | at_least: 16
+
+  if s.title_font == 'body'
+    assign title_font = 'inherit'
+  else
+    assign title_font = "var(--font-heading-family, Georgia, 'Times New Roman', serif)"
+  endif
+
+  if s.hover_scale
+    assign hover_scale = '1.03'
+  else
+    assign hover_scale = '1'
+  endif
+-%}
+
+{% style %}
+  /* ================================================================
+     ROOT — settings become custom properties, everything scoped to
+     this section instance by id
+     ================================================================ */
+  #WearsWellWith-{{ sid }} {
+    --www-bg: {{ s.bg_color }};
+    --www-text: {{ s.text_color }};
+    --www-label: {{ s.label_color }};
+    --www-price: {{ s.price_color }};
+    --www-btn: {{ s.button_color }};
+    --www-hairline: {{ s.text_color | color_modify: 'alpha', 0.18 }};
+    --www-skel: {{ s.text_color | color_modify: 'alpha', 0.06 }};
+    --www-gap: {{ s.card_gap }}px;
+    --www-gap-m: {{ gap_mobile }}px;
+    --www-cols: {{ s.cards_desktop }};
+    --www-cols-t: {{ s.cards_tablet }};
+    --www-ratio: {{ media_ratio }};
+    --www-align: {{ s.alignment }};
+    --www-heading: clamp({{ s.heading_size_mobile }}px, 3.2vw, {{ s.heading_size_desktop }}px);
+    --www-title-font: {{ title_font }};
+    --www-scale: {{ hover_scale }};
+    --www-ease: cubic-bezier(0.33, 0, 0.18, 1);
+    --www-speed: {{ s.marquee_speed }}s;
+    --www-pad-top: {{ s.padding_top }}px;
+    --www-pad-bottom: {{ s.padding_bottom }}px;
+
+    position: relative;
+    background-color: var(--www-bg);
+    color: var(--www-text);
+    padding-top: {{ s.padding_top_mobile }}px;
+    padding-bottom: {{ s.padding_bottom_mobile }}px;
+    overflow: hidden;
+  }
+  #WearsWellWith-{{ sid }}[hidden] {
+    display: none;
+  }
+
+  #WearsWellWith-{{ sid }} .www-container {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  /* ================================================================
+     HEADER — micro-label over a large serif heading; the hierarchy
+     contrast (tiny tracked caps against a big quiet serif) is the move
+     ================================================================ */
+  #WearsWellWith-{{ sid }} .www-header {
+    text-align: var(--www-align);
+    margin-bottom: 40px;
+  }
+  #WearsWellWith-{{ sid }} .www-label {
+    display: block;
+    margin: 0 0 14px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--www-label);
+  }
+  #WearsWellWith-{{ sid }} .www-heading {
+    margin: 0;
+    font-family: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    font-size: var(--www-heading);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+    color: var(--www-text);
+  }
+  #WearsWellWith-{{ sid }} .www-rule {
+    border: 0;
+    border-top: 1px solid var(--www-hairline);
+    margin: 40px 0 0;
+  }
+
+  /* ================================================================
+     CARDS — no backgrounds, no borders, no shadows; images float
+     directly on the section tone. Flex row so short rows center.
+     ================================================================ */
+  #WearsWellWith-{{ sid }} .www-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 48px var(--www-gap-m);
+  }
+  #WearsWellWith-{{ sid }} .www-item {
+    width: calc((100% - var(--www-gap-m)) / 2);
+    text-align: var(--www-align);
+  }
+
+  #WearsWellWith-{{ sid }} .www-card__link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+  }
+  #WearsWellWith-{{ sid }} .www-card__link:focus-visible {
+    outline: 1px solid var(--www-text);
+    outline-offset: 6px;
+  }
+
+  #WearsWellWith-{{ sid }} .www-media {
+    position: relative;
+    aspect-ratio: var(--www-ratio);
+    overflow: hidden;
+    background-color: var(--www-skel);
+  }
+  #WearsWellWith-{{ sid }} .www-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.6s var(--www-ease), opacity 0.6s var(--www-ease);
+  }
+  {%- if s.aspect_ratio == 'natural' %}
+  #WearsWellWith-{{ sid }} .www-media .www-img--a {
+    position: static;
+    height: auto;
+  }
+  {%- endif %}
+  #WearsWellWith-{{ sid }} .www-img--b {
+    opacity: 0;
+  }
+  {%- if s.hover_second_image %}
+  #WearsWellWith-{{ sid }} .www-card:hover .www-img--b,
+  #WearsWellWith-{{ sid }} .www-card:focus-within .www-img--b {
+    opacity: 1;
+  }
+  {%- endif %}
+  #WearsWellWith-{{ sid }} .www-card:hover .www-media img,
+  #WearsWellWith-{{ sid }} .www-card:focus-within .www-media img {
+    transform: scale(var(--www-scale));
+  }
+
+  #WearsWellWith-{{ sid }} .www-card__title {
+    margin: 18px 0 0;
+    font-family: var(--www-title-font);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    color: var(--www-text);
+  }
+  #WearsWellWith-{{ sid }} .www-card__price {
+    margin: 6px 0 0;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    color: var(--www-price);
+  }
+
+  /* Quick add: a hairline-underlined micro-link, never a filled button */
+  #WearsWellWith-{{ sid }} .www-quick {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 0 0 3px;
+    border: 0;
+    border-bottom: 1px solid {{ s.text_color | color_modify: 'alpha', 0.4 }};
+    background: transparent;
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--www-text);
+    cursor: pointer;
+    transition: border-color 0.4s var(--www-ease);
+  }
+  #WearsWellWith-{{ sid }} .www-quick:hover {
+    border-bottom-color: var(--www-text);
+  }
+  #WearsWellWith-{{ sid }} .www-quick:focus-visible {
+    outline: 1px solid var(--www-text);
+    outline-offset: 4px;
+  }
+
+  /* ================================================================
+     SKELETON — shimmer-free placeholder blocks in the background
+     tone, sized exactly like the cards: zero layout shift
+     ================================================================ */
+  #WearsWellWith-{{ sid }} .www-skel__media {
+    aspect-ratio: {% if s.aspect_ratio == 'natural' %}1 / 1{% else %}var(--www-ratio){% endif %};
+    background-color: var(--www-skel);
+  }
+  #WearsWellWith-{{ sid }} .www-skel__line {
+    height: 12px;
+    background-color: var(--www-skel);
+    margin: 20px auto 0;
+    width: 55%;
+  }
+  #WearsWellWith-{{ sid }} .www-skel__line--short {
+    margin-top: 9px;
+    width: 30%;
+    height: 11px;
+  }
+  {%- if s.alignment == 'left' %}
+  #WearsWellWith-{{ sid }} .www-skel__line {
+    margin-left: 0;
+    margin-right: auto;
+  }
+  {%- endif %}
+
+  /* Merchant-only note, rendered in the theme editor only */
+  #WearsWellWith-{{ sid }} .www-editor-note {
+    margin: 32px 0 0;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--www-label);
+  }
+  #WearsWellWith-{{ sid }} .www-editor-note[hidden] {
+    display: none;
+  }
+
+  /* ================================================================
+     ILLUSTRATIONS — decorative accents, absolutely positioned within
+     the section, pointer-events: none, behind content by default
+     ================================================================ */
+  #WearsWellWith-{{ sid }} .www-ills {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  #WearsWellWith-{{ sid }} .www-ill {
+    position: absolute;
+    width: var(--il-w);
+    opacity: var(--il-o);
+    transform: translate(var(--il-x), calc(var(--il-ty, 0px) + var(--il-y))) rotate(var(--il-r));
+  }
+  #WearsWellWith-{{ sid }} .www-ill--above {
+    z-index: 2;
+  }
+  #WearsWellWith-{{ sid }} .www-ill img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  /* Anchor zones — edge insets are clamped so accents never sit under
+     the centered content column at their default positions */
+  #WearsWellWith-{{ sid }} .www-ill--top-left        { top: 32px; left: clamp(16px, 3vw, 56px); }
+  #WearsWellWith-{{ sid }} .www-ill--top-right       { top: 32px; right: clamp(16px, 3vw, 56px); }
+  #WearsWellWith-{{ sid }} .www-ill--beside-heading  { top: calc(var(--www-pad-top) - 16px); left: 62%; }
+  #WearsWellWith-{{ sid }} .www-ill--left-of-cards   { top: 50%; left: clamp(8px, 2vw, 40px); --il-ty: -50%; }
+  #WearsWellWith-{{ sid }} .www-ill--right-of-cards  { top: 50%; right: clamp(8px, 2vw, 40px); --il-ty: -50%; }
+  #WearsWellWith-{{ sid }} .www-ill--bottom-left     { bottom: 32px; left: clamp(16px, 3vw, 56px); }
+  #WearsWellWith-{{ sid }} .www-ill--bottom-right    { bottom: 32px; right: clamp(16px, 3vw, 56px); }
+
+  @keyframes www-float-{{ sid }} {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-8px); }
+  }
+  #WearsWellWith-{{ sid }} .www-ill__inner--float {
+    animation: www-float-{{ sid }} 8s ease-in-out infinite alternate;
+  }
+
+  /* ================================================================
+     BUTTON MARQUEE — pill outline, transparent, width sized from the
+     single static label; on hover/focus the label loops seamlessly.
+     Track holds four identical copies; -50% of a max-content track is
+     exactly two copies, so any label length loops invisibly.
+     ================================================================ */
+  #WearsWellWith-{{ sid }} .www-btn-wrap {
+    margin-top: 56px;
+    text-align: var(--www-align);
+  }
+  #WearsWellWith-{{ sid }} .www-btn {
+    position: relative;
+    display: inline-block;
+    padding: 15px 40px;
+    border: 1px solid var(--www-btn);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--www-btn);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  #WearsWellWith-{{ sid }} .www-btn:focus-visible {
+    outline: 1px solid var(--www-btn);
+    outline-offset: 4px;
+  }
+  #WearsWellWith-{{ sid }} .www-btn__label {
+    display: inline-block;
+    transition: opacity 0.4s var(--www-ease);
+  }
+  #WearsWellWith-{{ sid }} .www-btn__marquee {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.4s var(--www-ease);
+  }
+  #WearsWellWith-{{ sid }} .www-btn__track {
+    display: inline-flex;
+    width: max-content;
+    animation: www-marquee-{{ sid }} var(--www-speed) linear infinite;
+    animation-play-state: paused;
+    {%- if s.marquee_direction == 'right' %}
+    animation-direction: reverse;
+    {%- endif %}
+  }
+  #WearsWellWith-{{ sid }} .www-btn__copy {
+    padding-right: 2.5em;
+  }
+  @keyframes www-marquee-{{ sid }} {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  #WearsWellWith-{{ sid }} .www-btn:hover .www-btn__label,
+  #WearsWellWith-{{ sid }} .www-btn:focus-visible .www-btn__label {
+    opacity: 0;
+  }
+  #WearsWellWith-{{ sid }} .www-btn:hover .www-btn__marquee,
+  #WearsWellWith-{{ sid }} .www-btn:focus-visible .www-btn__marquee {
+    opacity: 1;
+  }
+  #WearsWellWith-{{ sid }} .www-btn:hover .www-btn__track,
+  #WearsWellWith-{{ sid }} .www-btn:focus-visible .www-btn__track {
+    animation-play-state: running;
+  }
+
+  /* ================================================================
+     RESPONSIVE — mobile-first. Below 750px: stacked header, 2-column
+     grid or 1.4-per-view snap row. 750-989: tablet columns. 990+:
+     desktop row and full vertical padding.
+     ================================================================ */
+  {%- if s.mobile_layout == 'slider' %}
+  @media (max-width: 749px) {
+    #WearsWellWith-{{ sid }} .www-grid {
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+      margin: 0 -20px;
+      padding: 0 20px;
+    }
+    #WearsWellWith-{{ sid }} .www-grid::-webkit-scrollbar {
+      display: none;
+    }
+    #WearsWellWith-{{ sid }} .www-item {
+      flex: 0 0 auto;
+      width: calc((100% - var(--www-gap-m)) / 1.4);
+      scroll-snap-align: start;
+    }
+  }
+  {%- endif %}
+
+  @media (max-width: 749px) {
+    #WearsWellWith-{{ sid }} .www-ill {
+      display: none;
+    }
+    #WearsWellWith-{{ sid }} .www-ill--mobile {
+      display: block;
+    }
+    #WearsWellWith-{{ sid }} .www-header {
+      margin-bottom: 32px;
+    }
+    #WearsWellWith-{{ sid }} .www-rule {
+      margin-top: 28px;
+    }
+    #WearsWellWith-{{ sid }} .www-btn-wrap {
+      margin-top: 40px;
+    }
+  }
+
+  @media (min-width: 750px) {
+    #WearsWellWith-{{ sid }} {
+      padding-top: var(--www-pad-top);
+      padding-bottom: var(--www-pad-bottom);
+    }
+    #WearsWellWith-{{ sid }} .www-container {
+      padding: 0 48px;
+    }
+    #WearsWellWith-{{ sid }} .www-header {
+      margin-bottom: 64px;
+    }
+    #WearsWellWith-{{ sid }} .www-grid {
+      gap: var(--www-gap);
+    }
+    #WearsWellWith-{{ sid }} .www-item {
+      width: calc((100% - (var(--www-cols-t) - 1) * var(--www-gap)) / var(--www-cols-t));
+    }
+    {%- if s.enable_slider %}
+    #WearsWellWith-{{ sid }} .www-grid--slider {
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+    }
+    #WearsWellWith-{{ sid }} .www-grid--slider::-webkit-scrollbar {
+      display: none;
+    }
+    #WearsWellWith-{{ sid }} .www-grid--slider .www-item {
+      flex: 0 0 auto;
+      scroll-snap-align: start;
+      /* tablet: 2.5 cards with a peek */
+      width: calc((100% - 2 * var(--www-gap)) / 2.5);
+    }
+    {%- endif %}
+  }
+
+  @media (min-width: 990px) {
+    #WearsWellWith-{{ sid }} .www-item,
+    #WearsWellWith-{{ sid }} .www-grid--slider .www-item {
+      width: calc((100% - (var(--www-cols) - 1) * var(--www-gap)) / var(--www-cols));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #WearsWellWith-{{ sid }} .www-media img,
+    #WearsWellWith-{{ sid }} .www-btn__label,
+    #WearsWellWith-{{ sid }} .www-btn__marquee,
+    #WearsWellWith-{{ sid }} .www-quick {
+      transition: none;
+    }
+    #WearsWellWith-{{ sid }} .www-card:hover .www-media img,
+    #WearsWellWith-{{ sid }} .www-card:focus-within .www-media img {
+      transform: none;
+    }
+    #WearsWellWith-{{ sid }} .www-ill__inner--float {
+      animation: none;
+    }
+    /* Marquee fully disabled: static label stays put */
+    #WearsWellWith-{{ sid }} .www-btn__track {
+      animation: none;
+    }
+    #WearsWellWith-{{ sid }} .www-btn:hover .www-btn__label,
+    #WearsWellWith-{{ sid }} .www-btn:focus-visible .www-btn__label {
+      opacity: 1;
+    }
+    #WearsWellWith-{{ sid }} .www-btn:hover .www-btn__marquee,
+    #WearsWellWith-{{ sid }} .www-btn:focus-visible .www-btn__marquee {
+      opacity: 0;
+    }
+  }
+{% endstyle %}
+
+<div id="WearsWellWith-{{ sid }}" data-wears-well-with>
+  {% comment %} ---- ILLUSTRATIONS layer (decorative, inert) ---- {% endcomment %}
+  {%- if section.blocks.size > 0 -%}
+    <div class="www-ills" aria-hidden="true">
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'illustration' and block.settings.image != blank -%}
+          <div
+            class="www-ill www-ill--{{ block.settings.position }}{% if block.settings.show_mobile %} www-ill--mobile{% endif %}{% if block.settings.above_content %} www-ill--above{% endif %}"
+            style="--il-w: {{ block.settings.size }}px; --il-x: {{ block.settings.offset_x }}px; --il-y: {{ block.settings.offset_y }}px; --il-r: {{ block.settings.rotation }}deg; --il-o: {{ block.settings.opacity | divided_by: 100.0 }};"
+            {{ block.shopify_attributes }}
+          >
+            <div class="www-ill__inner{% if block.settings.float_anim %} www-ill__inner--float{% endif %}">
+              {{ block.settings.image | image_url: width: 480 | image_tag: loading: 'lazy', widths: '240, 480', alt: '' }}
+            </div>
+          </div>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  {%- endif -%}
+
+  <div class="www-container">
+    {% comment %} ---- HEADER ---- {% endcomment %}
+    {%- if s.show_label or s.heading != blank -%}
+      <div class="www-header">
+        {%- if s.show_label and s.label_text != blank -%}
+          <p class="www-label">{{ s.label_text | escape }}</p>
+        {%- endif -%}
+        {%- if s.heading != blank -%}
+          <{{ s.heading_tag }} class="www-heading">{{ s.heading | escape }}</{{ s.heading_tag }}>
+        {%- endif -%}
+        {%- if s.show_rule -%}
+          <hr class="www-rule" aria-hidden="true">
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+
+    {% comment %} ---- CARDS: skeletons now, real cards after fetch ---- {% endcomment %}
+    <ul
+      class="www-grid{% if s.enable_slider %} www-grid--slider{% endif %}"
+      role="list"
+      data-www-grid
+      aria-live="polite"
+    >
+      {%- for i in (1..visible_max) -%}
+        <li class="www-item www-skel" data-www-skel aria-hidden="true">
+          <div class="www-skel__media"></div>
+          <div class="www-skel__line"></div>
+          <div class="www-skel__line www-skel__line--short"></div>
+        </li>
+      {%- endfor -%}
+    </ul>
+
+    {%- if request.design_mode -%}
+      <p class="www-editor-note" data-www-editor-note hidden>
+        No complementary products found for this product yet — curate them in the Search &amp; Discovery app, or pick manual fallback products in the section settings. Shoppers never see this note or the empty layout.
+      </p>
+    {%- endif -%}
+
+    {% comment %} ---- BUTTON MARQUEE ---- {% endcomment %}
+    {%- if s.show_button and s.button_label != blank -%}
+      <div class="www-btn-wrap">
+        <a class="www-btn" {% if s.button_link != blank %}href="{{ s.button_link }}"{% else %}role="link" aria-disabled="true"{% endif %}>
+          <span class="www-btn__label">{{ s.button_label | escape }}</span>
+          <span class="www-btn__marquee" aria-hidden="true">
+            <span class="www-btn__track">
+              <span class="www-btn__copy">{{ s.button_label | escape }}</span>
+              <span class="www-btn__copy">{{ s.button_label | escape }}</span>
+              <span class="www-btn__copy">{{ s.button_label | escape }}</span>
+              <span class="www-btn__copy">{{ s.button_label | escape }}</span>
+            </span>
+          </span>
+        </a>
+      </div>
+    {%- endif -%}
+  </div>
+
+  {% comment %} ---- CARD TEMPLATE: cloned and filled by JS ---- {% endcomment %}
+  <template data-www-card-template>
+    <li class="www-item www-card">
+      <a class="www-card__link" href="#">
+        <div class="www-media">
+          <img
+            class="www-img--a"
+            alt=""
+            loading="lazy"
+            sizes="(min-width: 990px) calc(min(100vw, 1280px) / {{ s.cards_desktop }}), (min-width: 750px) 40vw, 46vw"
+          >
+          {%- if s.hover_second_image -%}
+            <img
+              class="www-img--b"
+              alt=""
+              loading="lazy"
+              aria-hidden="true"
+              sizes="(min-width: 990px) calc(min(100vw, 1280px) / {{ s.cards_desktop }}), (min-width: 750px) 40vw, 46vw"
+            >
+          {%- endif -%}
+        </div>
+        <h3 class="www-card__title"></h3>
+        {%- if s.show_price -%}
+          <p class="www-card__price"></p>
+        {%- endif -%}
+      </a>
+      {%- if s.show_quick_add -%}
+        <button type="button" class="www-quick" data-www-quick-add>
+          {{- s.quick_add_label | default: 'ADD' | escape -}}
+        </button>
+      {%- endif -%}
+    </li>
+  </template>
+
+  {% comment %}
+    ---- DATA FETCH config ----
+    Manual fallback products are serialized here so their prices are
+    formatted server-side with the store money format, and the current
+    / sold-out products are already excluded.
+  {% endcomment %}
+  {%- capture manual_json -%}
+    {%- assign printed = 0 -%}
+    {%- for item in s.fallback_products -%}
+      {%- if product != blank and item.id == product.id -%}{%- continue -%}{%- endif -%}
+      {%- if s.hide_sold_out and item.available == false -%}{%- continue -%}{%- endif -%}
+      {%- if printed > 0 -%},{%- endif -%}
+      {%- if item.price_varies -%}
+        {%- assign price_str = item.price_min | money | prepend: 'From ' -%}
+      {%- else -%}
+        {%- assign price_str = item.price | money -%}
+      {%- endif -%}
+      {%- capture srcset_a -%}
+        {%- if item.featured_image -%}{{ item.featured_image | image_url: width: 280 }} 280w, {{ item.featured_image | image_url: width: 420 }} 420w, {{ item.featured_image | image_url: width: 560 }} 560w, {{ item.featured_image | image_url: width: 840 }} 840w{%- endif -%}
+      {%- endcapture -%}
+      {%- capture srcset_b -%}
+        {%- if item.images[1] -%}{{ item.images[1] | image_url: width: 280 }} 280w, {{ item.images[1] | image_url: width: 420 }} 420w, {{ item.images[1] | image_url: width: 560 }} 560w, {{ item.images[1] | image_url: width: 840 }} 840w{%- endif -%}
+      {%- endcapture -%}
+      {
+        "title": {{ item.title | json }},
+        "url": {{ item.url | json }},
+        "price": {{ price_str | json }},
+        "image": {% if item.featured_image %}{{ item.featured_image | image_url: width: 840 | json }}{% else %}null{% endif %},
+        "srcset": {% if item.featured_image %}{{ srcset_a | strip | json }}{% else %}null{% endif %},
+        "image2": {% if item.images[1] %}{{ item.images[1] | image_url: width: 840 | json }}{% else %}null{% endif %},
+        "srcset2": {% if item.images[1] %}{{ srcset_b | strip | json }}{% else %}null{% endif %},
+        "variantId": {% if item.first_available_variant %}{{ item.first_available_variant.id }}{% else %}null{% endif %},
+        "variantCount": {{ item.variants.size }}
+      }
+      {%- assign printed = printed | plus: 1 -%}
+    {%- endfor -%}
+  {%- endcapture -%}
+
+  <script type="application/json" data-www-config>
+    {
+      "productId": {% if product != blank %}{{ product.id }}{% else %}null{% endif %},
+      "recommendationsUrl": {{ routes.product_recommendations_url | json }},
+      "cartAddUrl": {{ routes.cart_add_url | json }},
+      "moneyFormat": {{ shop.money_format | json }},
+      "limit": {{ s.products_count }},
+      "maxDisplay": {{ visible_max }},
+      "hideSoldOut": {{ s.hide_sold_out | json }},
+      "allowRelated": {{ s.allow_related | json }},
+      "designMode": {% if request.design_mode %}true{% else %}false{% endif %},
+      "manual": [{{ manual_json | strip }}]
+    }
+  </script>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    function initWearsWellWith(root) {
+      /* Guard against double initialization (inline run + section:load) */
+      if (!root || root.dataset.wwwInit === 'true') return;
+      root.dataset.wwwInit = 'true';
+
+      var configEl = root.querySelector('[data-www-config]');
+      var grid = root.querySelector('[data-www-grid]');
+      var template = root.querySelector('[data-www-card-template]');
+      if (!configEl || !grid || !template) return;
+
+      var config;
+      try {
+        config = JSON.parse(configEl.textContent);
+      } catch (err) {
+        return;
+      }
+
+      var editorNote = root.querySelector('[data-www-editor-note]');
+      var SRCSET_WIDTHS = [280, 420, 560, 840];
+
+      /* ------------------------------------------------------------
+         DATA FETCH — the fallback chain. Every failure path is
+         silent: shoppers either see products or no section at all.
+         ------------------------------------------------------------ */
+
+      /* Mirrors the shop money format Liquid renders with; covers its
+         common placeholders. Manual-list prices arrive pre-formatted. */
+      function formatMoney(cents) {
+        var value = ((cents || 0) / 100).toFixed(2);
+        var parts = value.split('.');
+        var grouped = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        var groupedEu = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        var map = {
+          amount: grouped + '.' + parts[1],
+          amount_no_decimals: grouped,
+          amount_with_comma_separator: groupedEu + ',' + parts[1],
+          amount_no_decimals_with_comma_separator: groupedEu
+        };
+        return config.moneyFormat.replace(/\{\{\s*(\w+)\s*\}\}/, function (match, key) {
+          return map[key] || map.amount;
+        });
+      }
+
+      function imageUrl(value) {
+        if (!value) return '';
+        if (typeof value === 'string') return value;
+        return value.src || value.url || '';
+      }
+
+      function withWidth(url, width) {
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + 'width=' + width;
+      }
+
+      function buildSrcset(url) {
+        return SRCSET_WIDTHS.map(function (w) {
+          return withWidth(url, w) + ' ' + w + 'w';
+        }).join(', ');
+      }
+
+      /* Recommendations JSON -> the same card model the manual list uses */
+      function normalize(p) {
+        var imgA = imageUrl(p.featured_image) || imageUrl(p.images && p.images[0]);
+        var imgB = imageUrl(p.images && p.images[1]);
+        if (imgB === imgA) imgB = '';
+        var firstAvailable = null;
+        var variants = p.variants || [];
+        for (var i = 0; i < variants.length; i++) {
+          if (variants[i].available) {
+            firstAvailable = variants[i].id;
+            break;
+          }
+        }
+        return {
+          title: p.title || '',
+          url: p.url || '#',
+          price: p.price_varies ? 'From ' + formatMoney(p.price_min) : formatMoney(p.price),
+          image: imgA ? withWidth(imgA, 840) : null,
+          srcset: imgA ? buildSrcset(imgA) : null,
+          image2: imgB ? withWidth(imgB, 840) : null,
+          srcset2: imgB ? buildSrcset(imgB) : null,
+          variantId: firstAvailable,
+          variantCount: variants.length
+        };
+      }
+
+      function filterProducts(list) {
+        return list.filter(function (p) {
+          if (String(p.id) === String(config.productId)) return false;
+          if (config.hideSoldOut && p.available === false) return false;
+          return true;
+        });
+      }
+
+      /* Fetch one intent; resolves to a card-model array or null.
+         Over-fetches a little so sold-out filtering can still fill
+         the row. Times out quietly after 7s. */
+      function fetchIntent(intent) {
+        var url =
+          config.recommendationsUrl +
+          '?product_id=' + config.productId +
+          '&intent=' + intent +
+          '&limit=' + Math.min(10, config.limit + 4);
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = controller
+          ? setTimeout(function () { controller.abort(); }, 7000)
+          : null;
+        return fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: controller ? controller.signal : undefined
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('recommendations unavailable');
+            return response.json();
+          })
+          .then(function (data) {
+            var products = (data && data.products) || [];
+            var kept = filterProducts(products);
+            if (!kept.length) return null;
+            return kept.slice(0, config.maxDisplay).map(normalize);
+          })
+          .catch(function () {
+            return null;
+          })
+          .then(function (result) {
+            if (timer) clearTimeout(timer);
+            return result;
+          });
+      }
+
+      /* ------------------------------------------------------------
+         CARDS — clone the Liquid <template>, fill via textContent and
+         attribute assignment only (no HTML injection), swap skeletons
+         out in one pass so nothing shifts.
+         ------------------------------------------------------------ */
+      function render(items) {
+        var frag = document.createDocumentFragment();
+        items.forEach(function (item) {
+          var node = template.content.cloneNode(true);
+          node.querySelector('.www-card__link').href = item.url;
+          node.querySelector('.www-card__title').textContent = item.title;
+          var priceEl = node.querySelector('.www-card__price');
+          if (priceEl) priceEl.textContent = item.price || '';
+          var imgA = node.querySelector('.www-img--a');
+          var imgB = node.querySelector('.www-img--b');
+          if (item.image) {
+            if (item.srcset) imgA.srcset = item.srcset;
+            imgA.src = item.image;
+          } else {
+            imgA.remove();
+          }
+          if (imgB) {
+            if (item.image2) {
+              if (item.srcset2) imgB.srcset = item.srcset2;
+              imgB.src = item.image2;
+            } else {
+              imgB.remove();
+            }
+          }
+          var quick = node.querySelector('[data-www-quick-add]');
+          if (quick) {
+            if (item.variantId) {
+              quick.dataset.variantId = item.variantId;
+              quick.dataset.single = item.variantCount === 1 ? '1' : '';
+              quick.dataset.url = item.url;
+            } else {
+              quick.remove();
+            }
+          }
+          frag.appendChild(node);
+        });
+        Array.prototype.forEach.call(
+          grid.querySelectorAll('[data-www-skel]'),
+          function (skel) { skel.remove(); }
+        );
+        grid.appendChild(frag);
+      }
+
+      /* Nothing worth showing: hide entirely for shoppers; in the
+         theme editor keep the skeleton layout and explain why. */
+      function showEmpty() {
+        if (config.designMode) {
+          if (editorNote) editorNote.hidden = false;
+        } else {
+          root.hidden = true;
+        }
+      }
+
+      function run() {
+        var first = config.productId
+          ? fetchIntent('complementary')
+          : Promise.resolve(null);
+        first
+          .then(function (items) {
+            if (items) return items;
+            if (config.manual && config.manual.length) {
+              return config.manual.slice(0, config.maxDisplay);
+            }
+            if (config.allowRelated && config.productId) {
+              return fetchIntent('related');
+            }
+            return null;
+          })
+          .then(function (items) {
+            if (items && items.length) {
+              render(items);
+            } else {
+              showEmpty();
+            }
+          })
+          .catch(showEmpty);
+      }
+
+      /* Quick add: single-variant products add via AJAX; anything with
+         options goes to the product page to choose. Failures navigate
+         to the product page — never an error message. */
+      grid.addEventListener('click', function (event) {
+        var button = event.target.closest ? event.target.closest('[data-www-quick-add]') : null;
+        if (!button || button.dataset.busy) return;
+        if (button.dataset.single !== '1') {
+          window.location.href = button.dataset.url;
+          return;
+        }
+        button.dataset.busy = 'true';
+        button.setAttribute('aria-busy', 'true');
+        var restore = button.textContent;
+
+        /* If the theme ships a Dawn-style cart drawer, refresh it in
+           the same call; otherwise the add still succeeds quietly. */
+        var drawer = document.querySelector('cart-drawer');
+        var useDrawer = drawer && typeof drawer.renderContents === 'function';
+        var payload = {
+          items: [{ id: parseInt(button.dataset.variantId, 10), quantity: 1 }]
+        };
+        if (useDrawer) {
+          payload.sections = ['cart-drawer', 'cart-icon-bubble'];
+          payload.sections_url = window.location.pathname;
+        }
+
+        fetch(config.cartAddUrl + '.js', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
+          .then(function (response) {
+            return response.json().then(function (data) {
+              /* add.js returns a "status" field on errors */
+              if (!response.ok || data.status) throw new Error('Cart add failed');
+              return data;
+            });
+          })
+          .then(function (data) {
+            if (useDrawer) {
+              try {
+                drawer.renderContents(data);
+              } catch (err) {
+                /* drawer refresh is cosmetic; the item is in the cart */
+              }
+            }
+            button.textContent = 'ADDED';
+            setTimeout(function () {
+              button.textContent = restore;
+              delete button.dataset.busy;
+              button.removeAttribute('aria-busy');
+            }, 1800);
+          })
+          .catch(function () {
+            window.location.href = button.dataset.url;
+          });
+      });
+
+      /* Fetch when the section approaches the viewport so this never
+         competes with above-the-fold work; immediately in the editor. */
+      if (config.designMode || !('IntersectionObserver' in window)) {
+        run();
+      } else {
+        var io = new IntersectionObserver(
+          function (entries) {
+            for (var i = 0; i < entries.length; i++) {
+              if (entries[i].isIntersecting) {
+                io.disconnect();
+                run();
+                return;
+              }
+            }
+          },
+          { rootMargin: '600px 0px' }
+        );
+        io.observe(root);
+      }
+    }
+
+    /* Register the theme editor hook once per page; each instance
+       initializes itself by id, so two instances never conflict */
+    if (!window.__wearsWellWithReady) {
+      window.__wearsWellWithReady = true;
+      document.addEventListener('shopify:section:load', function (event) {
+        var el = event.target.querySelector('[data-wears-well-with]');
+        if (el) initWearsWellWith(el);
+      });
+    }
+    initWearsWellWith(document.getElementById('WearsWellWith-{{ sid }}'));
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Wears Well With",
+  "tag": "section",
+  "class": "section-wears-well-with",
+  "max_blocks": 4,
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Intended for product templates. Complementary products are curated per product in the Search & Discovery app; the manual list below is the hand-picked fallback."
+    },
+    {
+      "type": "header",
+      "content": "Products"
+    },
+    {
+      "type": "range",
+      "id": "products_count",
+      "label": "Number of products",
+      "min": 2,
+      "max": 8,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "product_list",
+      "id": "fallback_products",
+      "label": "Manual fallback products",
+      "limit": 8,
+      "info": "Shown when no complementary products are curated for this product yet."
+    },
+    {
+      "type": "checkbox",
+      "id": "allow_related",
+      "label": "Allow \"related\" fallback",
+      "default": false,
+      "info": "Last resort: Shopify's automatic related products. Off means the section hides instead of showing something random."
+    },
+    {
+      "type": "checkbox",
+      "id": "hide_sold_out",
+      "label": "Hide sold-out products",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_slider",
+      "label": "Enable slider when products overflow",
+      "default": false,
+      "info": "Off caps the row at the cards-per-row setting. A static row is calmer."
+    },
+    {
+      "type": "header",
+      "content": "Header"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_label",
+      "label": "Show micro-label",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "label_text",
+      "label": "Micro-label text",
+      "default": "COMPLETE THE GESTURE"
+    },
+    {
+      "type": "color",
+      "id": "label_color",
+      "label": "Micro-label color",
+      "default": "#A08D76"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Wears well with"
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag",
+      "options": [
+        { "value": "h2", "label": "H2" },
+        { "value": "h3", "label": "H3" }
+      ],
+      "default": "h2"
+    },
+    {
+      "type": "range",
+      "id": "heading_size_desktop",
+      "label": "Heading size — desktop",
+      "min": 28,
+      "max": 64,
+      "step": 2,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "heading_size_mobile",
+      "label": "Heading size — mobile",
+      "min": 20,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 28
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Heading and text color",
+      "default": "#3D3128"
+    },
+    {
+      "type": "select",
+      "id": "alignment",
+      "label": "Alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_rule",
+      "label": "Show hairline rule under header",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "Cards"
+    },
+    {
+      "type": "select",
+      "id": "aspect_ratio",
+      "label": "Image aspect ratio",
+      "options": [
+        { "value": "square", "label": "Square" },
+        { "value": "portrait", "label": "Portrait (4:5)" },
+        { "value": "natural", "label": "Natural" }
+      ],
+      "default": "square"
+    },
+    {
+      "type": "range",
+      "id": "cards_desktop",
+      "label": "Cards per row — desktop",
+      "min": 2,
+      "max": 4,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "range",
+      "id": "cards_tablet",
+      "label": "Cards per row — tablet",
+      "min": 2,
+      "max": 3,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "select",
+      "id": "mobile_layout",
+      "label": "Mobile layout",
+      "options": [
+        { "value": "grid", "label": "2-column grid" },
+        { "value": "slider", "label": "Slider" }
+      ],
+      "default": "grid"
+    },
+    {
+      "type": "range",
+      "id": "card_gap",
+      "label": "Gap between cards",
+      "min": 24,
+      "max": 64,
+      "step": 4,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "checkbox",
+      "id": "show_price",
+      "label": "Show price",
+      "default": true
+    },
+    {
+      "type": "color",
+      "id": "price_color",
+      "label": "Price color",
+      "default": "#A08D76"
+    },
+    {
+      "type": "select",
+      "id": "title_font",
+      "label": "Title font",
+      "options": [
+        { "value": "heading", "label": "Serif heading font" },
+        { "value": "body", "label": "Body font" }
+      ],
+      "default": "heading"
+    },
+    {
+      "type": "checkbox",
+      "id": "hover_second_image",
+      "label": "Show second image on hover",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "hover_scale",
+      "label": "Subtle image scale on hover",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_quick_add",
+      "label": "Show quick-add text link",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "quick_add_label",
+      "label": "Quick-add label",
+      "default": "ADD"
+    },
+    {
+      "type": "header",
+      "content": "Illustrations"
+    },
+    {
+      "type": "paragraph",
+      "content": "Add up to 4 decorative accents as \"Illustration\" blocks — each has its own position, size, rotation and opacity. They sit behind the content and never intercept clicks."
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show button",
+      "default": false,
+      "info": "Hidden by default — on this section the cards are the point."
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "VIEW ALL"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link"
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button color",
+      "default": "#3D3128"
+    },
+    {
+      "type": "select",
+      "id": "marquee_direction",
+      "label": "Marquee direction",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "marquee_speed",
+      "label": "Marquee speed",
+      "min": 3,
+      "max": 12,
+      "step": 1,
+      "unit": "s",
+      "default": 6,
+      "info": "Seconds per loop — higher is slower."
+    },
+    {
+      "type": "header",
+      "content": "Colors & Spacing"
+    },
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Section background",
+      "default": "#FAF3E7"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Top padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 120
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Bottom padding — desktop",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 120
+    },
+    {
+      "type": "range",
+      "id": "padding_top_mobile",
+      "label": "Top padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom_mobile",
+      "label": "Bottom padding — mobile",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    }
+  ],
+  "blocks": [
+    {
+      "type": "illustration",
+      "name": "Illustration",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image",
+          "info": "Transparent PNG or SVG."
+        },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "options": [
+            { "value": "top-left", "label": "Top left of section" },
+            { "value": "top-right", "label": "Top right of section" },
+            { "value": "beside-heading", "label": "Beside heading" },
+            { "value": "left-of-cards", "label": "Left of card row" },
+            { "value": "right-of-cards", "label": "Right of card row" },
+            { "value": "bottom-left", "label": "Bottom left" },
+            { "value": "bottom-right", "label": "Bottom right" }
+          ],
+          "default": "top-right"
+        },
+        {
+          "type": "range",
+          "id": "offset_x",
+          "label": "Offset X",
+          "min": -100,
+          "max": 100,
+          "step": 5,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "offset_y",
+          "label": "Offset Y",
+          "min": -100,
+          "max": 100,
+          "step": 5,
+          "unit": "px",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "size",
+          "label": "Size",
+          "min": 40,
+          "max": 240,
+          "step": 10,
+          "unit": "px",
+          "default": 120
+        },
+        {
+          "type": "range",
+          "id": "rotation",
+          "label": "Rotation",
+          "min": -30,
+          "max": 30,
+          "step": 1,
+          "unit": "deg",
+          "default": 0
+        },
+        {
+          "type": "range",
+          "id": "opacity",
+          "label": "Opacity",
+          "min": 10,
+          "max": 100,
+          "step": 5,
+          "unit": "%",
+          "default": 90
+        },
+        {
+          "type": "checkbox",
+          "id": "show_mobile",
+          "label": "Show on mobile",
+          "default": false
+        },
+        {
+          "type": "checkbox",
+          "id": "float_anim",
+          "label": "Subtle float animation",
+          "default": false,
+          "info": "A very slow vertical drift. Disabled for visitors who prefer reduced motion."
+        },
+        {
+          "type": "checkbox",
+          "id": "above_content",
+          "label": "Place above content",
+          "default": false,
+          "info": "For deliberate overlap effects. Clicks always pass through."
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Wears Well With"
+    }
+  ]
+}
+{% endschema %}
