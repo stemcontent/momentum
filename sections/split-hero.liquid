@@ -1,0 +1,640 @@
+{% comment %}
+  ------------------------------------------------------------------
+  Split Hero
+  ------------------------------------------------------------------
+  Full-width hero split into two side-by-side images with a serif
+  headline and a pill button centered over the seam. Design reference:
+  apinistudio.com homepage hero.
+
+  Signature detail: on hover / :focus-visible the button label turns
+  into a seamless looping marquee. Pure CSS — the loop distance is
+  derived from the track's own width (translateX(-100% / copies)), so
+  it is seamless for any label length. No JavaScript is shipped.
+
+  Drop-in for any Online Store 2.0 theme. No external dependencies.
+  All CSS is scoped to #SplitHero-{{ section.id }} so two instances
+  on one page cannot conflict (the marquee keyframes name carries the
+  section id for the same reason).
+
+  File map: TOKENS -> LAYOUT -> IMAGES -> HEADLINE -> BUTTON MARQUEE
+  -> RESPONSIVE -> markup -> schema.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  comment
+    Richtext returns <p>-wrapped HTML, which is invalid inside a
+    heading tag. Convert paragraph breaks to <br> and drop the <p>s;
+    inline tags (<em>, <strong>, <a>) pass through untouched so the
+    merchant controls which words are italic.
+  endcomment
+  assign heading_html = s.heading | replace: '</p><p>', '<br>' | remove: '<p>' | remove: '</p>'
+  assign heading_plain = s.heading | strip_html | strip
+
+  assign heading_tag = s.heading_tag | default: 'h2'
+
+  case s.content_position
+    when 'top'
+      assign content_justify = 'flex-start'
+    when 'bottom'
+      assign content_justify = 'flex-end'
+    else
+      assign content_justify = 'center'
+  endcase
+
+  comment
+    Each desktop image occupies half the viewport; below 750px the
+    rendered image (whichever the mobile layout keeps) is full-bleed.
+  endcomment
+  assign image_sizes = '(max-width: 749px) 100vw, 50vw'
+-%}
+
+{% style %}
+  /* ================================================================
+     TOKENS — per-instance design tokens, all settings-driven values
+     land here as custom properties (never inline in the markup)
+     ================================================================ */
+  #SplitHero-{{ sid }} {
+    --sh-heading-color: {{ s.heading_color }};
+    --sh-heading-size: clamp({{ s.heading_size_mobile }}px, 5vw, {{ s.heading_size_desktop }}px);
+    {%- if s.heading_font == 'theme' %}
+    --sh-heading-font: var(--font-heading-family, Georgia, 'Times New Roman', serif);
+    {%- else %}
+    --sh-heading-font: Georgia, 'Times New Roman', Times, serif;
+    {%- endif %}
+    --sh-btn-color: {{ s.button_color }};
+    --sh-btn-hover-bg: {{ s.button_hover_bg | default: 'transparent' }};
+    --sh-marquee-speed: {{ s.marquee_speed }}s;
+    --sh-marquee-direction: {% if s.marquee_direction == 'right' %}reverse{% else %}normal{% endif %};
+    --sh-marquee-gap: 2.5em;
+    --sh-overlay: {{ s.overlay_opacity | divided_by: 100.0 }};
+    --sh-content-justify: {{ content_justify }};
+
+    padding-top: {{ s.padding_top }}px;
+    padding-bottom: {{ s.padding_bottom }}px;
+  }
+
+  /* ================================================================
+     LAYOUT — the height is reserved in CSS before any image loads,
+     so the hero never causes layout shift. svh with vh fallback so
+     mobile browser chrome doesn't make the section jump.
+     ================================================================ */
+  #SplitHero-{{ sid }} .sh-hero {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    {%- case s.section_height %}
+    {%- when '80vh' %}
+    height: 80vh;
+    height: 80svh;
+    min-height: 480px;
+    {%- when '60vh' %}
+    height: 60vh;
+    height: 60svh;
+    min-height: 400px;
+    {%- when 'custom' %}
+    height: {{ s.custom_height }}px;
+    {%- else %}
+    height: 100vh;
+    height: 100svh;
+    min-height: 600px;
+    {%- endcase %}
+  }
+
+  #SplitHero-{{ sid }} .sh-hero__content {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: var(--sh-content-justify);
+    gap: clamp(1.5rem, 4vh, 2.75rem);
+    padding: clamp(2.5rem, 8vh, 5rem) 1.5rem;
+    text-align: center;
+    /* Content layer spans both halves; keep it click-transparent so
+       only the interactive elements inside catch the pointer. */
+    pointer-events: none;
+  }
+  #SplitHero-{{ sid }} .sh-hero__content a {
+    pointer-events: auto;
+  }
+
+  /* ================================================================
+     IMAGES — each half is a positioning context; the img/svg fills
+     it with object-fit: cover, so intrinsic image size never affects
+     layout. The optional overlay sits between image and content.
+     ================================================================ */
+  #SplitHero-{{ sid }} .sh-media {
+    position: relative;
+    overflow: hidden;
+  }
+
+  #SplitHero-{{ sid }} .sh-media__img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #SplitHero-{{ sid }} .sh-media::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: rgb(0 0 0 / var(--sh-overlay));
+    pointer-events: none;
+  }
+
+  /* ================================================================
+     HEADLINE — fluid serif over the seam. Italic words come from the
+     merchant's own <em> tags in the richtext setting.
+     ================================================================ */
+  #SplitHero-{{ sid }} .sh-heading {
+    margin: 0;
+    font-family: var(--sh-heading-font);
+    font-size: var(--sh-heading-size);
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.12;
+    color: var(--sh-heading-color);
+    max-inline-size: 22ch;
+    text-wrap: balance;
+  }
+  #SplitHero-{{ sid }} .sh-heading em {
+    font-style: italic;
+  }
+  #SplitHero-{{ sid }} .sh-heading a {
+    color: inherit;
+  }
+
+  /* ================================================================
+     BUTTON MARQUEE
+     The pill is sized by the single static label in normal flow —
+     the marquee is an absolutely-positioned overlay, so the six
+     duplicate copies can never stretch the button.
+
+     Seamless-loop math: the track is width: max-content holding 6
+     identical items, each item carrying its gap as padding-inline-end.
+     Track width = 6 × (label + gap), so translateX(-100% / 6) shifts
+     by exactly one label+gap unit and the end frame is pixel-identical
+     to the start frame — for any label length, no hardcoded pixels.
+     (The gap must live inside each item, not as flex `gap`, or the
+     wrap point would be short by one gap.)
+
+     Paused by default, runs on :hover / :focus-visible, pauses in
+     place when the cursor leaves.
+     ================================================================ */
+  #SplitHero-{{ sid }} .sh-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    padding: 1.2em 3em;
+    border: 1px solid var(--sh-btn-color);
+    border-radius: 100px;
+    background-color: transparent;
+    color: var(--sh-btn-color);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: background-color 0.25s ease;
+  }
+  #SplitHero-{{ sid }} .sh-btn:hover {
+    background-color: var(--sh-btn-hover-bg);
+  }
+  #SplitHero-{{ sid }} .sh-btn:focus-visible {
+    outline: 2px solid var(--sh-btn-color);
+    outline-offset: 4px;
+  }
+
+  #SplitHero-{{ sid }} .sh-btn__label {
+    white-space: nowrap;
+    transition: opacity 0.15s linear;
+  }
+
+  #SplitHero-{{ sid }} .sh-btn__marquee {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.15s linear;
+  }
+
+  #SplitHero-{{ sid }} .sh-btn__track {
+    display: flex;
+    width: max-content;
+    will-change: transform;
+    animation: sh-marquee-{{ sid }} var(--sh-marquee-speed) linear infinite;
+    animation-direction: var(--sh-marquee-direction);
+    animation-play-state: paused;
+  }
+
+  #SplitHero-{{ sid }} .sh-btn__item {
+    white-space: nowrap;
+    padding-inline-end: var(--sh-marquee-gap);
+  }
+
+  /* Hover / keyboard focus: crossfade static label -> marquee, run. */
+  #SplitHero-{{ sid }} .sh-btn:hover .sh-btn__label,
+  #SplitHero-{{ sid }} .sh-btn:focus-visible .sh-btn__label {
+    opacity: 0;
+  }
+  #SplitHero-{{ sid }} .sh-btn:hover .sh-btn__marquee,
+  #SplitHero-{{ sid }} .sh-btn:focus-visible .sh-btn__marquee {
+    opacity: 1;
+  }
+  #SplitHero-{{ sid }} .sh-btn:hover .sh-btn__track,
+  #SplitHero-{{ sid }} .sh-btn:focus-visible .sh-btn__track {
+    animation-play-state: running;
+  }
+
+  @keyframes sh-marquee-{{ sid }} {
+    to {
+      transform: translateX(calc(-100% / 6));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #SplitHero-{{ sid }} .sh-btn__marquee {
+      display: none;
+    }
+    #SplitHero-{{ sid }} .sh-btn__track {
+      animation: none;
+    }
+    #SplitHero-{{ sid }} .sh-btn:hover .sh-btn__label,
+    #SplitHero-{{ sid }} .sh-btn:focus-visible .sh-btn__label {
+      opacity: 1;
+    }
+  }
+
+  /* ================================================================
+     RESPONSIVE — below 750px the merchant chooses: stack both halves
+     (50% height each) or show a single full-bleed half.
+     ================================================================ */
+  @media (max-width: 749px) {
+    #SplitHero-{{ sid }} .sh-hero--m-stack {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 1fr;
+    }
+    #SplitHero-{{ sid }} .sh-hero--m-left {
+      grid-template-columns: 1fr;
+    }
+    #SplitHero-{{ sid }} .sh-hero--m-left .sh-media--right {
+      display: none;
+    }
+    #SplitHero-{{ sid }} .sh-hero--m-right {
+      grid-template-columns: 1fr;
+    }
+    #SplitHero-{{ sid }} .sh-hero--m-right .sh-media--left {
+      display: none;
+    }
+  }
+{% endstyle %}
+
+<div
+  id="SplitHero-{{ sid }}"
+  class="split-hero{% if s.color_scheme != blank %} color-{{ s.color_scheme }} gradient{% endif %}"
+>
+  <div class="sh-hero sh-hero--m-{{ s.mobile_layout }}">
+    {% comment %} ---- IMAGES ---------------------------------------
+      Both halves share identical markup, so they're rendered from a
+      loop using dynamic setting keys (image_left / image_right, plus
+      the optional *_mobile overrides served via <picture>). Hero
+      images are never lazy-loaded: eager + fetchpriority high.
+    ---------------------------------------------------------------- {% endcomment %}
+    {%- assign sides = 'left,right' | split: ',' -%}
+    {%- assign placeholders = 'lifestyle-1,lifestyle-2' | split: ',' -%}
+    {%- for side in sides -%}
+      {%- liquid
+        assign img_key = 'image_' | append: side
+        assign mob_key = img_key | append: '_mobile'
+        assign img = section.settings[img_key]
+        assign img_mobile = section.settings[mob_key]
+        assign img_alt = img.alt | default: heading_plain | escape
+      -%}
+      <div class="sh-media sh-media--{{ side }}">
+        {%- if img != blank -%}
+          <picture>
+            {%- if img_mobile != blank -%}
+              <source
+                media="(max-width: 749px)"
+                sizes="100vw"
+                srcset="
+                  {{ img_mobile | image_url: width: 750 }} 750w,
+                  {{ img_mobile | image_url: width: 1100 }} 1100w,
+                  {{ img_mobile | image_url: width: 1500 }} 1500w,
+                  {{ img_mobile | image_url: width: 2200 }} 2200w
+                "
+              >
+            {%- endif -%}
+            {{
+              img
+              | image_url: width: 2200
+              | image_tag:
+                widths: '750, 1100, 1500, 2200',
+                sizes: image_sizes,
+                loading: 'eager',
+                fetchpriority: 'high',
+                alt: img_alt,
+                class: 'sh-media__img'
+            }}
+          </picture>
+        {%- else -%}
+          {{ placeholders[forloop.index0] | placeholder_svg_tag: 'sh-media__img sh-media__img--placeholder' }}
+        {%- endif -%}
+      </div>
+    {%- endfor -%}
+
+    {% comment %} ---- HEADLINE + BUTTON ---------------------------- {% endcomment %}
+    {%- if heading_html != blank or s.show_button -%}
+      <div class="sh-hero__content">
+        {%- if heading_html != blank -%}
+          <{{ heading_tag }} class="sh-heading">{{ heading_html }}</{{ heading_tag }}>
+        {%- endif -%}
+
+        {%- if s.show_button and s.button_label != blank -%}
+          {% comment %}
+            The static label sizes the pill and is the accessible
+            name; the marquee overlay is presentational only.
+          {% endcomment %}
+          <a
+            class="sh-btn"
+            {% if s.button_link != blank %}
+              href="{{ s.button_link }}"
+            {% else %}
+              role="link"
+              aria-disabled="true"
+            {% endif %}
+          >
+            <span class="sh-btn__label">{{ s.button_label | escape }}</span>
+            <span class="sh-btn__marquee" aria-hidden="true">
+              <span class="sh-btn__track">
+                {%- for i in (1..6) -%}
+                  <span class="sh-btn__item">{{ s.button_label | escape }}</span>
+                {%- endfor -%}
+              </span>
+            </span>
+          </a>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Split Hero",
+  "tag": "section",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "Images"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_left",
+      "label": "Left image"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_right",
+      "label": "Right image"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_left_mobile",
+      "label": "Left image, mobile override",
+      "info": "Optional. Shown below 750px instead of the left image."
+    },
+    {
+      "type": "image_picker",
+      "id": "image_right_mobile",
+      "label": "Right image, mobile override",
+      "info": "Optional. Shown below 750px instead of the right image."
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "Image overlay opacity",
+      "min": 0,
+      "max": 60,
+      "step": 5,
+      "unit": "%",
+      "default": 0,
+      "info": "Subtle darkening to keep text readable on bright images."
+    },
+    {
+      "type": "header",
+      "content": "Heading"
+    },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "<p>Everyday <em>jewelry</em> for playful spirit</p>",
+      "info": "Italicize any words with the editor's italic button."
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Heading tag",
+      "options": [
+        { "value": "h1", "label": "H1" },
+        { "value": "h2", "label": "H2" }
+      ],
+      "default": "h2",
+      "info": "Use H1 only on pages without another H1."
+    },
+    {
+      "type": "select",
+      "id": "heading_font",
+      "label": "Heading font",
+      "options": [
+        { "value": "serif", "label": "Editorial serif" },
+        { "value": "theme", "label": "Theme heading font" }
+      ],
+      "default": "serif"
+    },
+    {
+      "type": "range",
+      "id": "heading_size_desktop",
+      "label": "Heading size, desktop",
+      "min": 32,
+      "max": 120,
+      "step": 2,
+      "unit": "px",
+      "default": 72
+    },
+    {
+      "type": "range",
+      "id": "heading_size_mobile",
+      "label": "Heading size, mobile",
+      "min": 20,
+      "max": 64,
+      "step": 2,
+      "unit": "px",
+      "default": 34
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show button",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "Discover our world"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link"
+    },
+    {
+      "type": "select",
+      "id": "marquee_direction",
+      "label": "Marquee direction",
+      "options": [
+        { "value": "left", "label": "Scroll left" },
+        { "value": "right", "label": "Scroll right" }
+      ],
+      "default": "left",
+      "info": "The label scrolls on hover."
+    },
+    {
+      "type": "range",
+      "id": "marquee_speed",
+      "label": "Marquee speed",
+      "min": 3,
+      "max": 12,
+      "step": 0.5,
+      "unit": "s",
+      "default": 6,
+      "info": "Seconds per loop. Higher is slower."
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Heading color",
+      "default": "#F7F2E9"
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button text and border color",
+      "default": "#F7F2E9"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_bg",
+      "label": "Button hover background",
+      "info": "Optional. Leave empty for transparent."
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "default": "background-1",
+      "info": "Only visible behind section padding."
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "select",
+      "id": "section_height",
+      "label": "Section height",
+      "options": [
+        { "value": "100vh", "label": "Full screen (100vh)" },
+        { "value": "80vh", "label": "Tall (80vh)" },
+        { "value": "60vh", "label": "Medium (60vh)" },
+        { "value": "custom", "label": "Custom" }
+      ],
+      "default": "100vh"
+    },
+    {
+      "type": "range",
+      "id": "custom_height",
+      "label": "Custom height",
+      "min": 400,
+      "max": 1000,
+      "step": 20,
+      "unit": "px",
+      "default": 600,
+      "info": "Only used when Section height is set to Custom."
+    },
+    {
+      "type": "select",
+      "id": "content_position",
+      "label": "Content vertical position",
+      "options": [
+        { "value": "top", "label": "Top" },
+        { "value": "center", "label": "Center" },
+        { "value": "bottom", "label": "Bottom" }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "select",
+      "id": "mobile_layout",
+      "label": "Mobile layout",
+      "options": [
+        { "value": "stack", "label": "Stack both images vertically" },
+        { "value": "left", "label": "Show left image only" },
+        { "value": "right", "label": "Show right image only" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Padding top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Padding bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    }
+  ],
+  "presets": [
+    {
+      "name": "Split Hero"
+    }
+  ]
+}
+{% endschema %}
