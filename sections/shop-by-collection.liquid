@@ -344,6 +344,7 @@
     outline-offset: 3px;
   }
   #ShopByCollection-{{ sid }} .sbc-card__media {
+    display: block;
     position: relative;
     overflow: hidden;
     aspect-ratio: var(--sbc-ratio);
@@ -408,6 +409,7 @@
 
   /* Card typography: small and quiet, stable across breakpoints */
   #ShopByCollection-{{ sid }} .sbc-card__info {
+    display: block;
     padding-top: 14px;
   }
   #ShopByCollection-{{ sid }} .sbc-card__title {
@@ -491,16 +493,17 @@
         <span class="sbc-icon" aria-hidden="true">
           {%- case icon_mode -%}
             {%- when 'custom' -%}
-              <img
-                class="sbc-icon__img"
-                src="{{ s.custom_icon | image_url: width: 256 }}"
-                alt=""
-                loading="lazy"
-                {% if s.custom_icon.width > 0 and s.custom_icon.height > 0 %}
-                  width="{{ s.custom_icon.width }}"
-                  height="{{ s.custom_icon.height }}"
-                {% endif %}
-              >
+              {%- liquid
+                comment
+                  Intrinsic dimensions when the upload reports them
+                  (SVGs may not); CSS sizes the icon either way.
+                endcomment
+                assign icon_dims = ''
+                if s.custom_icon.width > 0 and s.custom_icon.height > 0
+                  assign icon_dims = 'width="' | append: s.custom_icon.width | append: '" height="' | append: s.custom_icon.height | append: '"'
+                endif
+              -%}
+              <img class="sbc-icon__img" src="{{ s.custom_icon | image_url: width: 256 }}" alt="" loading="lazy" {{ icon_dims }}>
             {%- when 'library' -%}
               {%- case s.icon_library -%}
                 {%- when 'arrow_down' -%}
@@ -560,7 +563,7 @@
             {% endif %}
           >
             <a class="sbc-card__link" href="{{ product.url }}">
-              <span class="sbc-card__media">
+              <div class="sbc-card__media">
                 {%- if s.show_sold_out_badge and product.available == false -%}
                   <span class="sbc-card__badge">Sold out</span>
                 {%- endif -%}
@@ -574,7 +577,7 @@
                 {%- endif -%}
               </span>
 
-              <span class="sbc-card__info">
+              <div class="sbc-card__info">
                 {%- if s.show_title -%}
                   <h3 class="sbc-card__title">{{ product.title | escape }}</h3>
                 {%- endif -%}
@@ -623,10 +626,10 @@
           -%}
           <li class="sbc-card">
             <a class="sbc-card__link" href="{{ button_url }}" tabindex="-1" aria-hidden="true">
-              <span class="sbc-card__media">
+              <div class="sbc-card__media">
                 {{ ph_name | placeholder_svg_tag: 'sbc-card__placeholder' }}
               </span>
-              <span class="sbc-card__info">
+              <div class="sbc-card__info">
                 {%- if s.show_title -%}
                   <h3 class="sbc-card__title">Example product</h3>
                 {%- endif -%}
