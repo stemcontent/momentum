@@ -7,7 +7,7 @@
         "label_text": "OUR STORY",
         "text_before": "<p>We make quiet, essential things for</p>",
         "text_after": "<p>the small rituals of home.</p>",
-        "image_scale": 1.1,
+        "image_scale": 110,
         "image_shape": "arch",
         "heading_tag": "h1",
         "color_bg": "#FAF3E7",
