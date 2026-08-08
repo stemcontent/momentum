@@ -1,0 +1,714 @@
+{% comment %}
+  ------------------------------------------------------------------
+  Hero CTA — Cleopatra Closet
+  ------------------------------------------------------------------
+  Standalone Online Store 2.0 section. Full-width band with a rich
+  text headline, an optional eyebrow line, an outline button, and a
+  row of repeatable short labels along the bottom.
+
+  Every visible element is merchant-editable from the theme editor.
+  There is no image in this section by design.
+
+  Rich text cannot carry color in Shopify's editor, so bolded words
+  in the headline are re-styled as the accent color (see bold_style).
+
+  All CSS is scoped to #HeroCta-{{ section.id }} so two instances on
+  one page never collide. No JavaScript.
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  comment
+    Rich text arrives wrapped in <p> tags, which cannot legally live
+    inside an <h1>/<h2>. Unwrap the paragraphs and join them with a
+    line break so the merchant's line structure survives.
+  endcomment
+  assign heading_html = ''
+  assign heading_parts = s.heading | split: '</p>'
+  for part in heading_parts
+    assign clean_part = part | replace: '<p>', '' | strip
+    if clean_part != blank
+      if heading_html == blank
+        assign heading_html = clean_part
+      else
+        assign heading_html = heading_html | append: '<br>' | append: clean_part
+      endif
+    endif
+  endfor
+  assign heading_text = s.heading | strip_html | strip
+
+  assign heading_tag = 'h2'
+  if s.heading_tag == 'h1'
+    assign heading_tag = 'h1'
+  endif
+
+  comment
+    Fluid headline: interpolate between the phone size at 375px and
+    the desktop size at 1440px, clamped at both ends. Guard against a
+    mobile size set larger than the desktop size, which would make
+    clamp() collapse to the minimum.
+  endcomment
+  assign h_max = s.heading_size_desktop
+  assign h_min = s.heading_size_mobile
+  if h_min > h_max
+    assign h_min = h_max
+  endif
+  assign h_range = h_max | minus: h_min
+
+  case s.heading_font
+    when 'sans'
+      assign heading_family = '"Futura", "Century Gothic", "Avenir Next", "Segoe UI", system-ui, sans-serif'
+    when 'serif'
+      assign heading_family = 'Georgia, "Times New Roman", "Playfair Display", serif'
+    else
+      assign heading_family = 'inherit'
+  endcase
+
+  case s.accent_font
+    when 'sans'
+      assign accent_family = '"Futura", "Century Gothic", "Avenir Next", "Segoe UI", system-ui, sans-serif'
+    when 'serif'
+      assign accent_family = 'Georgia, "Times New Roman", "Playfair Display", serif'
+    else
+      assign accent_family = 'inherit'
+  endcase
+
+  comment
+    The button renders as a real anchor when it has a destination.
+    With no link set it is hidden on the storefront, but still shown
+    (inert) inside the theme editor so styling stays visible while
+    the merchant is still choosing where it points.
+  endcomment
+  assign show_button = false
+  assign button_is_link = false
+  if s.show_button and s.button_label != blank
+    if s.button_link != blank
+      assign show_button = true
+      assign button_is_link = true
+    elsif request.design_mode
+      assign show_button = true
+    endif
+  endif
+-%}
+
+{% style %}
+  /* ---- Per-instance design tokens (scoped by section id) ---- */
+  #HeroCta-{{ sid }} {
+    --hero-bg: {{ s.bg_color }};
+    --hero-text: {{ s.text_color }};
+    --hero-accent: {{ s.accent_color }};
+    --hero-eyebrow: {{ s.eyebrow_color }};
+    --hero-eyebrow-size: {{ s.eyebrow_size }}px;
+    --hero-btn-text: {{ s.button_text_color }};
+    --hero-btn-border: {{ s.button_border_color }};
+    --hero-btn-bg: {{ s.button_bg_color }};
+    --hero-btn-radius: {{ s.button_radius }}px;
+    --hero-btn-border-width: {{ s.button_border_width }}px;
+    --hero-btn-size: {{ s.button_text_size }}px;
+    --hero-label-size: {{ s.label_size }}px;
+    --hero-labels-gap: {{ s.labels_gap }}px;
+    --hero-width: {{ s.content_width }}px;
+    --hero-align: {{ s.text_align }};
+    --hero-heading-font: {{ heading_family }};
+    --hero-accent-font: {{ accent_family }};
+    --hero-heading-weight: {{ s.heading_weight }};
+    /* Interpolates from {{ h_min }}px at 375px wide to {{ h_max }}px at 1440px wide */
+    --hero-heading-size: clamp(
+      {{ h_min }}px,
+      calc({{ h_min }}px + {{ h_range }} * ((100vw - 375px) / 1065)),
+      {{ h_max }}px
+    );
+
+    background-color: var(--hero-bg);
+    color: var(--hero-text);
+    padding-top: {{ s.padding_top_mobile }}px;
+    padding-bottom: {{ s.padding_bottom_mobile }}px;
+  }
+
+  /* Scoped reset so the section's own math holds in any theme */
+  #HeroCta-{{ sid }},
+  #HeroCta-{{ sid }} *,
+  #HeroCta-{{ sid }} *::before,
+  #HeroCta-{{ sid }} *::after {
+    box-sizing: border-box;
+  }
+
+  #HeroCta-{{ sid }} .hero-cta__container {
+    max-width: var(--hero-width);
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  #HeroCta-{{ sid }} .hero-cta__content {
+    text-align: var(--hero-align);
+  }
+
+  /* ---- Eyebrow ---- */
+  #HeroCta-{{ sid }} .hero-cta__eyebrow {
+    margin: 0 0 18px;
+    color: var(--hero-eyebrow);
+    font-family: var(--hero-accent-font);
+    font-size: var(--hero-eyebrow-size);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    line-height: 1.4;
+    overflow-wrap: break-word;
+  }
+
+  /* ---- Headline ---- */
+  #HeroCta-{{ sid }} .hero-cta__heading {
+    margin: 0;
+    color: inherit;
+    font-family: var(--hero-heading-font);
+    font-size: var(--hero-heading-size);
+    font-weight: var(--hero-heading-weight);
+    line-height: 1.16;
+    letter-spacing: -0.005em;
+    /* Keeps the two lines evenly weighted instead of orphaning a word */
+    text-wrap: balance;
+    overflow-wrap: break-word;
+  }
+
+  /* Rich text has no color control, so bold becomes the highlight.
+     "color" keeps the light weight of the surrounding headline. */
+  {%- if s.bold_style == 'color' %}
+  #HeroCta-{{ sid }} .hero-cta__heading strong,
+  #HeroCta-{{ sid }} .hero-cta__heading b {
+    color: var(--hero-accent);
+    font-weight: inherit;
+  }
+  {%- elsif s.bold_style == 'color_bold' %}
+  #HeroCta-{{ sid }} .hero-cta__heading strong,
+  #HeroCta-{{ sid }} .hero-cta__heading b {
+    color: var(--hero-accent);
+    font-weight: 700;
+  }
+  {%- else %}
+  #HeroCta-{{ sid }} .hero-cta__heading strong,
+  #HeroCta-{{ sid }} .hero-cta__heading b {
+    font-weight: 700;
+  }
+  {%- endif %}
+
+  #HeroCta-{{ sid }} .hero-cta__heading a {
+    color: inherit;
+    text-underline-offset: 0.15em;
+  }
+
+  /* ---- Button ---- */
+  #HeroCta-{{ sid }} .hero-cta__button-wrap {
+    margin-top: 34px;
+  }
+
+  #HeroCta-{{ sid }} .hero-cta__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    max-width: 100%;
+    padding: 12px 34px;
+    border: var(--hero-btn-border-width) solid var(--hero-btn-border);
+    border-radius: var(--hero-btn-radius);
+    background-color: var(--hero-btn-bg);
+    color: var(--hero-btn-text);
+    font-family: var(--hero-accent-font);
+    font-size: var(--hero-btn-size);
+    line-height: 1.2;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-decoration: none;
+    overflow-wrap: break-word;
+    transition: opacity 0.15s ease;
+  }
+  #HeroCta-{{ sid }} a.hero-cta__button:hover {
+    opacity: 0.72;
+  }
+  #HeroCta-{{ sid }} .hero-cta__button:focus-visible {
+    outline: 2px solid var(--hero-btn-border);
+    outline-offset: 3px;
+  }
+
+  /* ---- Bottom labels ---- */
+  #HeroCta-{{ sid }} .hero-cta__labels {
+    list-style: none;
+    display: flex;
+    margin: var(--hero-labels-gap) 0 0;
+    padding: 0;
+    gap: 14px;
+  }
+
+  #HeroCta-{{ sid }} .hero-cta__label {
+    /* Equal shares keep the row evenly distributed at any block count */
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+    font-family: var(--hero-accent-font);
+    font-size: var(--hero-label-size);
+    line-height: 1.3;
+    text-align: center;
+    overflow-wrap: break-word;
+  }
+  #HeroCta-{{ sid }} .hero-cta__label:first-child {
+    text-align: left;
+  }
+  #HeroCta-{{ sid }} .hero-cta__label:last-child {
+    text-align: right;
+  }
+  /* A lone label has nothing to sit opposite, so center it */
+  #HeroCta-{{ sid }} .hero-cta__label:only-child {
+    text-align: center;
+  }
+
+  {%- if s.labels_mobile_layout == 'stack' %}
+  /* Phones: stack into a centered column rather than cramming the row */
+  @media (max-width: 749px) {
+    #HeroCta-{{ sid }} .hero-cta__labels {
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #HeroCta-{{ sid }} .hero-cta__label,
+    #HeroCta-{{ sid }} .hero-cta__label:first-child,
+    #HeroCta-{{ sid }} .hero-cta__label:last-child {
+      flex: 0 0 auto;
+      text-align: center;
+    }
+  }
+  {%- else %}
+  /* Phones, "keep them in one row": hold the row and let each label
+     wrap inside its own column rather than breaking the layout */
+  @media (max-width: 749px) {
+    #HeroCta-{{ sid }} .hero-cta__labels {
+      gap: 10px;
+    }
+  }
+  {%- endif %}
+
+  @media (min-width: 750px) {
+    #HeroCta-{{ sid }} {
+      padding-top: {{ s.padding_top }}px;
+      padding-bottom: {{ s.padding_bottom }}px;
+    }
+    #HeroCta-{{ sid }} .hero-cta__container {
+      padding: 0 40px;
+    }
+    #HeroCta-{{ sid }} .hero-cta__labels {
+      gap: 24px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #HeroCta-{{ sid }} .hero-cta__button {
+      transition: none;
+    }
+  }
+{% endstyle %}
+
+<div id="HeroCta-{{ sid }}" class="hero-cta">
+  <div class="hero-cta__container">
+    {%- if heading_text != blank or show_button or s.show_eyebrow -%}
+      <div class="hero-cta__content">
+        {%- if s.show_eyebrow and s.eyebrow != blank -%}
+          <p class="hero-cta__eyebrow">{{ s.eyebrow | escape }}</p>
+        {%- endif -%}
+
+        {%- if heading_text != blank -%}
+          <{{ heading_tag }} class="hero-cta__heading">{{ heading_html }}</{{ heading_tag }}>
+        {%- endif -%}
+
+        {%- if show_button -%}
+          <div class="hero-cta__button-wrap">
+            {%- if button_is_link -%}
+              <a class="hero-cta__button" href="{{ s.button_link }}">{{ s.button_label | escape }}</a>
+            {%- else -%}
+              {%- comment -%} Theme editor only: no destination chosen yet {%- endcomment -%}
+              <span class="hero-cta__button">{{ s.button_label | escape }}</span>
+            {%- endif -%}
+          </div>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <ul class="hero-cta__labels" role="list">
+        {%- for block in section.blocks -%}
+          {%- if block.settings.text != blank -%}
+            <li
+              class="hero-cta__label"
+              style="color: {{ block.settings.color }};"
+              {{ block.shopify_attributes }}
+            >
+              {{- block.settings.text | escape -}}
+            </li>
+          {%- endif -%}
+        {%- endfor -%}
+      </ul>
+    {%- endif -%}
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Hero CTA",
+  "tag": "section",
+  "class": "section-hero-cta",
+  "max_blocks": 5,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Headline"
+    },
+    {
+      "type": "richtext",
+      "id": "heading",
+      "label": "Headline",
+      "default": "<p>We bring Egyptian fashion straight to your door. Delivery anywhere in the <strong>UAE.</strong></p>",
+      "info": "Select any words and press the bold button to highlight them in the accent color."
+    },
+    {
+      "type": "select",
+      "id": "bold_style",
+      "label": "What bolded words look like",
+      "options": [
+        { "value": "color", "label": "Accent color only (matches current design)" },
+        { "value": "color_bold", "label": "Accent color and bold" },
+        { "value": "bold", "label": "Bold only" }
+      ],
+      "default": "color",
+      "info": "The current design uses accent color only, so the headline stays one light weight throughout."
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Accent color for highlighted words",
+      "default": "#4A2A3D"
+    },
+    {
+      "type": "select",
+      "id": "heading_tag",
+      "label": "Headline importance for search engines",
+      "options": [
+        { "value": "h1", "label": "Main page headline (use at top of a page)" },
+        { "value": "h2", "label": "Section headline (use further down a page)" }
+      ],
+      "default": "h1",
+      "info": "Only one main headline per page. Choose section headline if something above this already uses it."
+    },
+    {
+      "type": "header",
+      "content": "Small line above the headline"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_eyebrow",
+      "label": "Show the small line above the headline",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "eyebrow",
+      "label": "Small line text",
+      "default": "Cleopatra Closet",
+      "info": "Only appears when the checkbox above is ticked."
+    },
+    {
+      "type": "color",
+      "id": "eyebrow_color",
+      "label": "Small line color",
+      "default": "#8B2028"
+    },
+    {
+      "type": "range",
+      "id": "eyebrow_size",
+      "label": "Small line text size",
+      "min": 10,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 13
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show the button",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button text",
+      "default": "Shop now"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button link",
+      "info": "Where the button takes shoppers. The button is hidden on your live store until a link is chosen."
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button text color",
+      "default": "#1F3057"
+    },
+    {
+      "type": "color",
+      "id": "button_border_color",
+      "label": "Button border color",
+      "default": "#1F3057"
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Button fill color",
+      "default": "rgba(0,0,0,0)",
+      "info": "Drag the transparency slider all the way down for a see-through button like the current design."
+    },
+    {
+      "type": "range",
+      "id": "button_radius",
+      "label": "Button corner roundness",
+      "min": 0,
+      "max": 60,
+      "step": 2,
+      "unit": "px",
+      "default": 60,
+      "info": "Higher numbers give the pill shape. 0 gives square corners."
+    },
+    {
+      "type": "range",
+      "id": "button_border_width",
+      "label": "Button border thickness",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "unit": "px",
+      "default": 1
+    },
+    {
+      "type": "range",
+      "id": "button_text_size",
+      "label": "Button text size",
+      "min": 11,
+      "max": 22,
+      "step": 1,
+      "unit": "px",
+      "default": 13
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "bg_color",
+      "label": "Section background color",
+      "default": "#F2F1EE"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Main text color",
+      "default": "#1F3057"
+    },
+    {
+      "type": "header",
+      "content": "Headline size and style"
+    },
+    {
+      "type": "range",
+      "id": "heading_size_desktop",
+      "label": "Headline size on computers",
+      "min": 28,
+      "max": 96,
+      "step": 2,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "heading_size_mobile",
+      "label": "Headline size on phones",
+      "min": 20,
+      "max": 56,
+      "step": 1,
+      "unit": "px",
+      "default": 30,
+      "info": "Sizes in between are worked out automatically, so the headline never jumps."
+    },
+    {
+      "type": "select",
+      "id": "heading_weight",
+      "label": "Headline thickness",
+      "options": [
+        { "value": "300", "label": "Light (matches current design)" },
+        { "value": "400", "label": "Regular" },
+        { "value": "500", "label": "Medium" }
+      ],
+      "default": "300"
+    },
+    {
+      "type": "select",
+      "id": "heading_font",
+      "label": "Headline lettering style",
+      "options": [
+        { "value": "sans", "label": "Rounded modern (matches current design)" },
+        { "value": "serif", "label": "Classic with serifs" },
+        { "value": "theme", "label": "Same as the rest of my store" }
+      ],
+      "default": "sans"
+    },
+    {
+      "type": "select",
+      "id": "accent_font",
+      "label": "Button and bottom label lettering style",
+      "options": [
+        { "value": "serif", "label": "Classic with serifs (matches current design)" },
+        { "value": "sans", "label": "Rounded modern" },
+        { "value": "theme", "label": "Same as the rest of my store" }
+      ],
+      "default": "serif"
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "content_width",
+      "label": "How wide the content can get",
+      "min": 600,
+      "max": 1600,
+      "step": 20,
+      "unit": "px",
+      "default": 1200
+    },
+    {
+      "type": "select",
+      "id": "text_align",
+      "label": "Text alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Centered" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "header",
+      "content": "Space around the section"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Space above section (computers)",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 120
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Space below section (computers)",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 80
+    },
+    {
+      "type": "range",
+      "id": "padding_top_mobile",
+      "label": "Space above section (phones)",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom_mobile",
+      "label": "Space below section (phones)",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "header",
+      "content": "Labels at the bottom"
+    },
+    {
+      "type": "select",
+      "id": "labels_mobile_layout",
+      "label": "How the bottom labels sit on phones",
+      "options": [
+        { "value": "stack", "label": "Stack in a centered column" },
+        { "value": "row", "label": "Keep them in one row" }
+      ],
+      "default": "stack"
+    },
+    {
+      "type": "range",
+      "id": "label_size",
+      "label": "Bottom label text size",
+      "min": 12,
+      "max": 28,
+      "step": 1,
+      "unit": "px",
+      "default": 20
+    },
+    {
+      "type": "range",
+      "id": "labels_gap",
+      "label": "Space between the headline area and the labels",
+      "min": 0,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 96
+    }
+  ],
+  "blocks": [
+    {
+      "type": "label",
+      "name": "Bottom label",
+      "settings": [
+        {
+          "type": "text",
+          "id": "text",
+          "label": "Label text",
+          "default": "Made in Egypt"
+        },
+        {
+          "type": "color",
+          "id": "color",
+          "label": "Label color",
+          "default": "#8B2028"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Hero CTA",
+      "blocks": [
+        { "type": "label", "settings": { "text": "Made in Egypt", "color": "#8B2028" } },
+        { "type": "label", "settings": { "text": "Essential", "color": "#8B2028" } },
+        { "type": "label", "settings": { "text": "Authentic", "color": "#8B2028" } }
+      ]
+    }
+  ]
+}
+{% endschema %}
