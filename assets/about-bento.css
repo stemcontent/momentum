@@ -1,0 +1,285 @@
+/* About bento — Cleopatra Closet.
+   Every class is prefixed .ab-. No !important anywhere.
+   Merchant values arrive as custom properties scoped to #ab-<section id>,
+   so two instances on one page stay independent.
+   Base = mobile. 768px and 1024px layer on top. */
+
+.ab {
+  --ab-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ab-par: var(--ab-par-m);
+  --ab-line-stagger: 90ms;
+  background: var(--ab-page-bg); color: var(--ab-dark-text);
+  font-family: var(--ab-body-font); font-size: var(--ab-body-size); line-height: 1.6;
+  padding-block: var(--ab-pad-top-m) var(--ab-pad-bot-m);
+  overflow-x: clip;
+}
+.ab *, .ab *::before, .ab *::after { box-sizing: border-box; }
+.ab-inner { max-width: var(--ab-maxw); margin-inline: auto; padding-inline: 20px; }
+.ab-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+
+/* ---- tiles ---- */
+.ab-tile {
+  position: relative; min-width: 0; overflow: hidden;
+  border-radius: var(--ab-radius);
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 700ms var(--ab-ease), transform 700ms var(--ab-ease);
+  transition-delay: calc(var(--i, 0) * var(--ab-stagger));
+  will-change: transform, opacity;
+}
+.ab-tile.is-in { opacity: 1; transform: none; }
+.ab--no-reveal .ab-tile { opacity: 1; transform: none; transition: none; will-change: auto; }
+
+/* Area names are assigned from 768px up only. Mobile is a single
+   column with no grid-template-areas, and a grid-area naming an area
+   that does not exist would be read as an unknown *line* name, which
+   makes the browser invent empty implicit tracks. */
+.ab-story { background: var(--ab-light-bg); padding: 28px 22px; }
+.ab-hero { min-height: 340px; }
+.ab-quote {
+  background: var(--ab-quote-bg); color: var(--ab-light-text);
+  padding: 26px 22px; min-height: 150px;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.ab-arch { min-height: 200px; }
+.ab-stats {
+  background: var(--ab-accent-bg);
+  padding: 22px 18px; display: grid; align-content: center;
+}
+.ab-ticker { background: var(--ab-dark-bg); color: var(--ab-light-text); }
+
+/* ---- media: zoom on the img, parallax on the wrapper ---- */
+/* min-height rather than height: the chosen photo shape sets the natural
+   height (so the setting genuinely changes the layout) while the tile is
+   still always covered edge to edge when the grid row is taller. */
+.ab-media {
+  position: relative; overflow: hidden; width: 100%; min-height: 100%;
+  background: var(--ab-soft);
+}
+.ab-media--hero { aspect-ratio: var(--ab-hero-ratio); }
+.ab-media--arch { aspect-ratio: 4 / 3; }
+.ab-media-inner {
+  position: absolute; left: 0; right: 0;
+  top: calc(var(--ab-par) * -1);
+  height: calc(100% + (var(--ab-par) * 2));
+  will-change: transform; contain: paint;
+}
+.ab-media img, .ab-media .ab-placeholder {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+}
+.ab-media .ab-placeholder { fill: var(--ab-hairline); background: var(--ab-soft); }
+.ab-media img { transform: scale(1.06); }
+.ab-tile.is-in .ab-media img { transform: none; transition: transform 1200ms ease-out; }
+.ab--no-zoom .ab-media img { transform: none; transition: none; }
+
+@supports (animation-timeline: view()) {
+  .ab-media-inner {
+    animation: ab-par linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+  @keyframes ab-par {
+    from { transform: translate3d(0, calc(var(--ab-par) * -1), 0); }
+    to { transform: translate3d(0, var(--ab-par), 0); }
+  }
+}
+
+.ab-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0) 62%);
+  opacity: var(--ab-overlay);
+}
+.ab-tint {
+  position: absolute; inset: 0; pointer-events: none;
+  background: var(--ab-tint); mix-blend-mode: multiply;
+}
+.ab-arch--tint .ab-media img { filter: saturate(0.55) contrast(1.04); }
+.ab-caption {
+  position: absolute; left: 18px; right: 18px; bottom: 16px; margin: 0;
+  color: var(--ab-light-text); font-size: 13px; letter-spacing: 0.04em;
+}
+
+/* ---- story ---- */
+.ab-eyebrow {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 14px;
+  font-size: 11px; line-height: 1.4; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.ab-rule { display: block; flex: none; width: 28px; height: 1px; background: var(--ab-hairline); }
+.ab-heading {
+  margin: 0 0 16px;
+  font-family: var(--ab-heading-font); font-weight: var(--ab-heading-weight);
+  font-size: var(--ab-h-size-m); line-height: 1.05; letter-spacing: -0.01em;
+}
+.ab-line { display: block; overflow: hidden; }
+.ab-line-i {
+  display: block; padding-bottom: 0.08em; transform: translateY(110%);
+  transition: transform 800ms var(--ab-ease);
+  transition-delay: calc(var(--i, 0) * var(--ab-stagger) + var(--l, 0) * var(--ab-line-stagger));
+}
+.ab-tile.is-in .ab-line-i { transform: none; }
+.ab--no-head .ab-line-i { transform: none; transition: none; }
+.ab-accent { font-style: italic; color: var(--ab-accent-text); }
+
+.ab-body { margin: 0 0 18px; }
+.ab-body > :first-child { margin-top: 0; }
+.ab-body > :last-child { margin-bottom: 0; }
+.ab-body a { color: inherit; }
+.ab-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; padding: 0; list-style: none; }
+.ab-tag {
+  border: 1px solid var(--ab-hairline); border-radius: 999px; padding: 5px 12px;
+  font-size: 12px; line-height: 1.3; letter-spacing: 0.04em; color: var(--ab-accent-text);
+}
+.ab-btn {
+  display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+  font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase;
+  transition: opacity 200ms ease;
+}
+.ab-btn--pill {
+  background: var(--ab-dark-bg); color: var(--ab-light-text);
+  border-radius: 999px; padding: 13px 26px;
+}
+.ab-btn--link {
+  color: var(--ab-dark-text); padding-bottom: 3px;
+  border-bottom: 1px solid var(--ab-hairline);
+}
+.ab-btn:hover { opacity: 0.82; }
+.ab-arrow { flex: none; }
+.ab a:focus-visible, .ab button:focus-visible {
+  outline: 2px solid var(--ab-accent-text); outline-offset: 2px; border-radius: 2px;
+}
+
+/* ---- quote ---- */
+.ab-qmark {
+  position: absolute; top: -6px; right: 14px; pointer-events: none;
+  font-family: var(--ab-heading-font); font-size: 96px; line-height: 1; opacity: 0.16;
+}
+.ab-blockquote { position: relative; margin: 0; }
+.ab-blockquote p {
+  margin: 0 0 12px; font-family: var(--ab-heading-font);
+  font-size: calc(var(--ab-body-size) + 4px); line-height: 1.35;
+}
+.ab-cite {
+  font-size: 12px; font-style: normal; letter-spacing: 0.14em;
+  text-transform: uppercase; opacity: 0.72;
+}
+
+/* ---- stats ---- */
+.ab-metrics {
+  display: grid; grid-template-columns: repeat(var(--ab-metric-cols-m), minmax(0, 1fr));
+  gap: 16px 10px; margin: 0; padding: 0; list-style: none;
+}
+.ab-metric { min-width: 0; text-align: center; }
+.ab-metric-num {
+  margin: 0 0 4px; font-family: var(--ab-heading-font);
+  font-size: clamp(22px, 6vw, 30px); line-height: 1.1;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* JS reserves the exact final width here before counting starts, so the
+   suffix never slides. tabular-nums keeps the digits from jittering. */
+.ab-metric-val { display: inline-block; }
+.ab-metric-suffix { font-size: 0.62em; vertical-align: 0.35em; margin-left: 1px; }
+.ab-metric-label { margin: 0; font-size: 12px; line-height: 1.35; letter-spacing: 0.06em; opacity: 0.82; }
+
+/* ---- ticker ---- */
+.ab-ticker-vp { overflow: hidden; }
+.ab-ticker-track {
+  display: flex; width: max-content; will-change: transform;
+  animation: ab-tick var(--ab-ticker-dur) linear infinite;
+  animation-play-state: paused;
+}
+@keyframes ab-tick {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+.ab-ticker.is-running .ab-ticker-track { animation-play-state: running; }
+.ab-ticker--right .ab-ticker-track { animation-direction: reverse; }
+.ab--no-tick .ab-ticker-track { animation: none; }
+.ab-ticker-list { display: flex; align-items: center; margin: 0; padding: 0; list-style: none; }
+.ab-ticker-item {
+  display: flex; align-items: center; gap: 18px; padding: 16px 0 16px 18px;
+  white-space: nowrap; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.ab-ticker-sep { opacity: 0.5; font-size: 0.8em; }
+@media (hover: hover) {
+  .ab-ticker--hoverpause:hover .ab-ticker-track { animation-play-state: paused; }
+}
+/* full bleed on phones: break out of the 20px container padding */
+@media (max-width: 767.98px) {
+  .ab-ticker { margin-inline: -20px; width: calc(100% + 40px); border-radius: 0; }
+}
+
+/* ================= tablet, 768px and up ================= */
+@media (min-width: 768px) {
+  .ab { --ab-par: var(--ab-par-d); padding-block: var(--ab-pad-top-d) var(--ab-pad-bot-d); }
+  .ab-inner { padding-inline: 32px; }
+  .ab-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas: var(--ab-areas-t);
+    gap: var(--ab-gap);
+  }
+  .ab-story { grid-area: story; }
+  .ab-hero { grid-area: hero; }
+  .ab-quote { grid-area: quote; }
+  .ab-arch { grid-area: arch; }
+  .ab-stats { grid-area: stats; }
+  .ab-ticker { grid-area: ticker; }
+  .ab-heading { font-size: calc(var(--ab-h-size-m) + (var(--ab-h-size-d) - var(--ab-h-size-m)) * 0.5); }
+  .ab-story { padding: 34px 30px; }
+  .ab-quote { padding: 30px 26px; }
+  .ab-stats { padding: 26px 20px; }
+  .ab-hero, .ab-arch { min-height: 0; }
+  .ab-media--arch { aspect-ratio: var(--ab-arch-ratio); }
+  .ab-hero--fill .ab-media--hero { aspect-ratio: auto; }
+  .ab-metrics { grid-template-columns: repeat(var(--ab-metric-cols), minmax(0, 1fr)); gap: 0; }
+  .ab-metric-num { font-size: clamp(19px, 2.1vw, 33px); }
+  .ab-metric { padding-inline: 8px; }
+  .ab-metric + .ab-metric { border-inline-start: 1px solid var(--ab-hairline); }
+  .ab-ticker-item { gap: 26px; padding: 18px 0 18px 26px; }
+}
+
+/* ================= desktop, 1024px and up ================= */
+@media (min-width: 1024px) {
+  .ab-inner { padding-inline: 48px; }
+  .ab-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: auto auto minmax(220px, auto) minmax(120px, auto);
+    grid-auto-rows: minmax(120px, auto);
+    grid-template-areas: var(--ab-areas-d);
+  }
+  .ab-heading { font-size: var(--ab-h-size-d); }
+  .ab-story { padding: 44px 40px; }
+  .ab-quote { padding: 36px 32px; }
+}
+
+/* Reflow fallback, two or more tiles hidden: two columns, wide tiles span
+   the full row, so there are never empty cells or orphan rows. */
+@media (min-width: 768px) {
+  .ab--flow .ab-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: none; grid-template-rows: none;
+  }
+  .ab--flow .ab-tile { grid-area: auto; }
+  .ab--flow .ab-story, .ab--flow .ab-ticker, .ab--flow .ab-tile--wide { grid-column: 1 / -1; }
+}
+
+/* ---- hover lift, mouse pointers only ---- */
+@media (hover: hover) and (pointer: fine) {
+  .ab-tile.ab-done { transition: transform 300ms ease; }
+  .ab-tile.ab-done:hover { transform: translateY(-3px); }
+  .ab--no-hover .ab-tile.ab-done:hover { transform: none; }
+}
+
+/* ---- parallax off switches ---- */
+.ab.ab--noanim { --ab-par: 0px; }
+@media (max-width: 767.98px) { .ab--par0-m .ab-media-inner { animation: none; transform: none; } }
+@media (min-width: 768px) { .ab--par0-d .ab-media-inner { animation: none; transform: none; } }
+
+/* ================= reduced motion: nothing moves ================= */
+@media (prefers-reduced-motion: reduce) {
+  .ab { --ab-par: 0px; }
+  .ab .ab-tile { opacity: 1; transform: none; transition: none; will-change: auto; }
+  .ab .ab-tile:hover { transform: none; }
+  .ab .ab-line-i { transform: none; transition: none; }
+  .ab .ab-media img { transform: none; transition: none; }
+  .ab .ab-media-inner { animation: none; transform: none; will-change: auto; }
+  .ab .ab-ticker-track { animation: none; will-change: auto; }
+}

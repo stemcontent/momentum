@@ -1,0 +1,1022 @@
+{% comment %}
+  ------------------------------------------------------------------
+  About bento — Cleopatra Closet
+  ------------------------------------------------------------------
+  A six-tile bento "About us" block. Every string, image, colour,
+  toggle and animation value is a theme-editor setting; nothing in
+  this file needs to be edited to change the content.
+
+  Structure
+    sections/about-bento.liquid  markup + schema  (this file)
+    assets/about-bento.css       all layout / motion styling
+    assets/about-bento.js        observers, parallax fallback, ticker
+
+  Notes for future maintainers
+    - DOM order is the mobile reading order: story, hero, quote,
+      arch, stats, ticker. Desktop and tablet re-order visually with
+      grid-template-areas, which are emitted below as the custom
+      properties --ab-areas-d / --ab-areas-t so the stylesheet stays
+      free of merchant-driven values.
+    - Hiding tiles: all six visible and any single-tile-hidden case
+      gets a hand-built, gap-free template. Two or more hidden falls
+      back to a two-column auto flow (.ab--flow) where wide tiles
+      span both columns, which is also gap-free.
+    - The only inline CSS is the token block below (settings ->
+      custom properties, plus the @font-face rules Shopify requires
+      to be inlined).
+  ------------------------------------------------------------------
+{% endcomment %}
+
+{%- comment -%}
+  A literal newline, used to split the heading textarea into lines.
+  It has to live in its own assign tag: the line-based {% liquid %}
+  form below cannot hold a string that spans two lines.
+{%- endcomment -%}
+{%- assign nl = '
+' -%}
+
+{%- liquid
+  assign s = section.settings
+  assign sid = section.id
+
+  assign metrics = section.blocks | where: 'type', 'metric'
+  assign ticker_items = section.blocks | where: 'type', 'ticker_item'
+
+  comment
+    A tile only renders when its toggle is on AND it has something to
+    show. Empty stats / ticker tiles would otherwise leave a coloured
+    void in the grid.
+  endcomment
+  assign show_story = s.show_story
+  assign show_hero = s.show_hero
+  assign show_quote = s.show_quote
+  assign show_arch = s.show_arch
+  assign show_stats = s.show_stats
+  assign show_ticker = s.show_ticker
+  if metrics.size == 0
+    assign show_stats = false
+  endif
+  if ticker_items.size == 0
+    assign show_ticker = false
+  endif
+
+  assign hidden_count = 0
+  assign hidden_key = ''
+  unless show_story
+    assign hidden_count = hidden_count | plus: 1
+    assign hidden_key = 'story'
+  endunless
+  unless show_hero
+    assign hidden_count = hidden_count | plus: 1
+    assign hidden_key = 'hero'
+  endunless
+  unless show_quote
+    assign hidden_count = hidden_count | plus: 1
+    assign hidden_key = 'quote'
+  endunless
+  unless show_arch
+    assign hidden_count = hidden_count | plus: 1
+    assign hidden_key = 'arch'
+  endunless
+  unless show_stats
+    assign hidden_count = hidden_count | plus: 1
+    assign hidden_key = 'stats'
+  endunless
+  unless show_ticker
+    assign hidden_count = hidden_count | plus: 1
+    assign hidden_key = 'ticker'
+  endunless
+
+  assign visible_count = 6 | minus: hidden_count
+-%}
+
+{%- if visible_count > 0 -%}
+
+  {%- liquid
+    comment
+      ---- grid-template-areas -------------------------------------
+      Emitted as custom properties. Desktop = 6 columns, tablet = 4.
+      Every template below fills every cell of every row, so there is
+      never an empty cell or an orphan row.
+    endcomment
+    assign flow = false
+
+    if hidden_count == 0
+      capture areas_d
+        echo '"story story story story hero hero" "story story story story hero hero" "arch arch quote quote hero hero" "arch arch ticker ticker stats stats"'
+      endcapture
+      capture areas_t
+        echo '"story story story story" "arch arch hero hero" "quote quote hero hero" "stats stats hero hero" "ticker ticker ticker ticker"'
+      endcapture
+
+    elsif hidden_count == 1
+      case hidden_key
+        when 'story'
+          capture areas_d
+            echo '"hero hero hero arch arch arch" "hero hero hero arch arch arch" "hero hero hero quote quote quote" "ticker ticker ticker stats stats stats"'
+          endcapture
+          capture areas_t
+            echo '"arch arch hero hero" "quote quote hero hero" "stats stats hero hero" "ticker ticker ticker ticker"'
+          endcapture
+        when 'hero'
+          capture areas_d
+            echo '"story story story story story story" "story story story story story story" "arch arch arch quote quote quote" "arch arch arch stats stats stats" "ticker ticker ticker ticker ticker ticker"'
+          endcapture
+          capture areas_t
+            echo '"story story story story" "arch arch quote quote" "stats stats stats stats" "ticker ticker ticker ticker"'
+          endcapture
+        when 'quote'
+          capture areas_d
+            echo '"story story story story hero hero" "story story story story hero hero" "arch arch arch arch hero hero" "ticker ticker ticker stats stats stats"'
+          endcapture
+          capture areas_t
+            echo '"story story story story" "arch arch hero hero" "stats stats hero hero" "ticker ticker ticker ticker"'
+          endcapture
+        when 'arch'
+          capture areas_d
+            echo '"story story story story hero hero" "story story story story hero hero" "quote quote quote quote hero hero" "ticker ticker stats stats hero hero"'
+          endcapture
+          capture areas_t
+            echo '"story story story story" "quote quote hero hero" "stats stats hero hero" "ticker ticker ticker ticker"'
+          endcapture
+        when 'stats'
+          capture areas_d
+            echo '"story story story story hero hero" "story story story story hero hero" "arch arch quote quote hero hero" "arch arch ticker ticker ticker ticker"'
+          endcapture
+          capture areas_t
+            echo '"story story story story" "arch arch hero hero" "quote quote hero hero" "ticker ticker ticker ticker"'
+          endcapture
+        when 'ticker'
+          capture areas_d
+            echo '"story story story story hero hero" "story story story story hero hero" "arch arch quote quote hero hero" "arch arch stats stats hero hero"'
+          endcapture
+          capture areas_t
+            echo '"story story story story" "arch arch hero hero" "quote quote hero hero" "stats stats hero hero"'
+          endcapture
+      endcase
+
+    else
+      comment
+        Two or more tiles hidden: two-column auto flow. story and
+        ticker always span both columns; if the number of remaining
+        half-width tiles is odd, the last one is widened so the final
+        row is never half empty.
+      endcomment
+      assign flow = true
+      assign half = 0
+      if show_hero
+        assign half = half | plus: 1
+        assign last_half = 'hero'
+      endif
+      if show_quote
+        assign half = half | plus: 1
+        assign last_half = 'quote'
+      endif
+      if show_arch
+        assign half = half | plus: 1
+        assign last_half = 'arch'
+      endif
+      if show_stats
+        assign half = half | plus: 1
+        assign last_half = 'stats'
+      endif
+      assign half_mod = half | modulo: 2
+      unless half_mod == 1
+        assign last_half = ''
+      endunless
+    endif
+
+    comment
+      ---- aspect ratios ----------------------------------
+    endcomment
+    case s.hero_ratio
+      when 'r45'
+        assign hero_ratio = '4 / 5'
+      when 'r23'
+        assign hero_ratio = '2 / 3'
+      when 'fill'
+        assign hero_ratio = '3 / 4'
+      else
+        assign hero_ratio = '3 / 4'
+    endcase
+    case s.arch_ratio
+      when 'r45'
+        assign arch_ratio = '4 / 5'
+      when 'r23'
+        assign arch_ratio = '2 / 3'
+      when 'r11'
+        assign arch_ratio = '1 / 1'
+      else
+        assign arch_ratio = '4 / 3'
+    endcase
+
+    comment
+      ---- ticker separator -------------------------------
+    endcomment
+    case s.ticker_separator
+      when 'dot'
+        assign sep = '•'
+      when 'slash'
+        assign sep = '/'
+      when 'star'
+        assign sep = '✦'
+      when 'none'
+        assign sep = ''
+      else
+        assign sep = '◆'
+    endcase
+
+    comment
+      ---- animation switches -----------------------------
+    endcomment
+    assign anim = s.anim_enable
+    assign par_d = s.parallax_desktop
+    assign par_m = s.parallax_mobile
+    assign mods = ''
+    unless anim
+      assign par_d = 0
+      assign par_m = 0
+      assign mods = 'ab--noanim ab--no-reveal ab--no-head ab--no-zoom ab--no-tick ab--no-hover'
+    else
+      unless s.anim_reveal
+        assign mods = mods | append: ' ab--no-reveal'
+      endunless
+      unless s.anim_heading
+        assign mods = mods | append: ' ab--no-head'
+      endunless
+      unless s.anim_zoom
+        assign mods = mods | append: ' ab--no-zoom'
+      endunless
+      unless s.anim_ticker
+        assign mods = mods | append: ' ab--no-tick'
+      endunless
+      unless s.anim_hover
+        assign mods = mods | append: ' ab--no-hover'
+      endunless
+    endunless
+    if flow
+      assign mods = mods | append: ' ab--flow'
+    endif
+    if par_d == 0
+      assign mods = mods | append: ' ab--par0-d'
+    endif
+    if par_m == 0
+      assign mods = mods | append: ' ab--par0-m'
+    endif
+
+    comment
+      ---- metric column counts ----------------------------
+    endcomment
+    assign metric_cols = metrics.size
+    assign metric_cols_m = metrics.size
+    if metrics.size > 3
+      assign metric_cols_m = 2
+    endif
+
+    comment
+      ---- responsive image widths --------------------------
+    endcomment
+    assign widths = '400,600,800,1200,1600,2000' | split: ','
+    assign media_sizes = '(min-width: 1024px) min(34vw, 520px), (min-width: 768px) calc(50vw - 38px), calc(100vw - 40px)'
+
+    comment
+      ---- reveal stagger index ------------------------------
+    endcomment
+    assign idx = 0
+  -%}
+
+  {{ 'about-bento.css' | asset_url | stylesheet_tag }}
+
+  {%- style -%}
+    {{ s.heading_font | font_face: font_display: 'swap' }}
+    {{ s.body_font | font_face: font_display: 'swap' }}
+    {%- assign heading_italic = s.heading_font | font_modify: 'style', 'italic' -%}
+    {%- if heading_italic -%}{{ heading_italic | font_face: font_display: 'swap' }}{%- endif -%}
+    {%- assign body_bold = s.body_font | font_modify: 'weight', 'bolder' -%}
+    {%- if body_bold -%}{{ body_bold | font_face: font_display: 'swap' }}{%- endif -%}
+
+    #ab-{{ sid }} {
+      --ab-page-bg: {{ s.color_page_bg }};
+      --ab-light-bg: {{ s.color_light_bg }};
+      --ab-dark-bg: {{ s.color_dark_bg }};
+      --ab-accent-bg: {{ s.color_accent_bg }};
+      --ab-dark-text: {{ s.color_dark_text }};
+      --ab-light-text: {{ s.color_light_text }};
+      --ab-accent-text: {{ s.color_accent_text }};
+      --ab-tint: {{ s.color_tint }};
+      --ab-quote-bg: {{ s.quote_bg }};
+      --ab-hairline: {{ s.color_dark_text | color_modify: 'alpha', 0.22 }};
+      --ab-soft: {{ s.color_dark_text | color_modify: 'alpha', 0.1 }};
+
+      --ab-maxw: {{ s.content_width }}px;
+      --ab-gap: {{ s.tile_gap }}px;
+      --ab-radius: {{ s.corner_radius }}px;
+      --ab-pad-top-d: {{ s.space_above_desktop }}px;
+      --ab-pad-bot-d: {{ s.space_below_desktop }}px;
+      --ab-pad-top-m: {{ s.space_above_mobile }}px;
+      --ab-pad-bot-m: {{ s.space_below_mobile }}px;
+
+      --ab-heading-font: {{ s.heading_font.family }}, {{ s.heading_font.fallback_families }};
+      --ab-body-font: {{ s.body_font.family }}, {{ s.body_font.fallback_families }};
+      --ab-heading-weight: {{ s.heading_font.weight }};
+      --ab-h-size-d: {{ s.heading_size_desktop }}px;
+      --ab-h-size-m: {{ s.heading_size_mobile | at_least: 30 }}px;
+      --ab-body-size: {{ s.body_size }}px;
+
+      --ab-hero-ratio: {{ hero_ratio }};
+      --ab-arch-ratio: {{ arch_ratio }};
+      --ab-overlay: {% if s.hero_overlay %}{{ s.hero_overlay_opacity | divided_by: 100.0 }}{% else %}0{% endif %};
+
+      --ab-metric-cols: {{ metric_cols }};
+      --ab-metric-cols-m: {{ metric_cols_m }};
+      --ab-ticker-dur: {{ s.ticker_speed }}s;
+
+      --ab-stagger: {{ s.reveal_stagger }}ms;
+      --ab-par-d: {{ par_d }}px;
+      --ab-par-m: {{ par_m }}px;
+
+      --ab-areas-d: {{ areas_d }};
+      --ab-areas-t: {{ areas_t }};
+    }
+  {%- endstyle -%}
+
+  <section
+    class="ab {{ mods | strip }}"
+    id="ab-{{ sid }}"
+    data-ab-root
+    data-ab-anim="{% if anim %}on{% else %}off{% endif %}"
+    data-ab-count="{% if anim and s.anim_count %}on{% else %}off{% endif %}"
+    {% if s.aria_label != blank %}aria-label="{{ s.aria_label | escape }}"{% endif %}
+  >
+    <div class="ab-inner">
+      <div class="ab-grid">
+
+        {%- comment -%} ---------------- 1. Story ---------------- {%- endcomment -%}
+        {%- if show_story -%}
+          <div class="ab-tile ab-story" style="--i: {{ idx }};">
+            {%- assign idx = idx | plus: 1 -%}
+
+            {%- if s.eyebrow != blank -%}
+              <p class="ab-eyebrow">
+                {%- if s.show_eyebrow_rule -%}<span class="ab-rule" aria-hidden="true"></span>{%- endif -%}
+                <span>{{ s.eyebrow | escape }}</span>
+              </p>
+            {%- endif -%}
+
+            {%- if s.heading != blank -%}
+              {%- liquid
+                assign heading_lines = s.heading | strip | split: nl
+                assign accent = s.accent_word | strip | downcase
+                assign accent_size = accent | size
+                assign accent_done = false
+                assign line_i = 0
+              -%}
+              <h2 class="ab-heading">
+                {%- for raw_line in heading_lines -%}
+                  {%- assign line = raw_line | strip -%}
+                  {%- if line == blank -%}{%- continue -%}{%- endif -%}
+                  {%- liquid
+                    assign markup = line | escape
+                    if accent_size > 0 and accent_done == false
+                      assign lower = line | downcase
+                      if lower contains accent
+                        assign parts = lower | split: accent
+                        assign before_len = 0
+                        if parts.size > 0
+                          assign before_len = parts[0] | size
+                        endif
+                        assign after_start = before_len | plus: accent_size
+                        assign after_len = line | size | minus: after_start
+                        assign before = ''
+                        if before_len > 0
+                          assign before = line | slice: 0, before_len
+                        endif
+                        assign word = line | slice: before_len, accent_size
+                        assign after = ''
+                        if after_len > 0
+                          assign after = line | slice: after_start, after_len
+                        endif
+                        capture markup
+                          echo before | escape
+                          echo '<em class="ab-accent">'
+                          echo word | escape
+                          echo '</em>'
+                          echo after | escape
+                        endcapture
+                        assign accent_done = true
+                      endif
+                    endif
+                  -%}
+                  <span class="ab-line"><span class="ab-line-i" style="--l: {{ line_i }};">{{ markup }}</span></span>
+                  {%- assign line_i = line_i | plus: 1 -%}
+                {%- endfor -%}
+              </h2>
+            {%- endif -%}
+
+            {%- if s.body != blank -%}
+              <div class="ab-body rte">{{ s.body }}</div>
+            {%- endif -%}
+
+            {%- if s.tags != blank -%}
+              <ul class="ab-tags">
+                {%- assign tag_list = s.tags | split: ',' -%}
+                {%- for tag in tag_list -%}
+                  {%- assign tag_text = tag | strip -%}
+                  {%- if tag_text != blank -%}
+                    <li class="ab-tag">{{ tag_text | escape }}</li>
+                  {%- endif -%}
+                {%- endfor -%}
+              </ul>
+            {%- endif -%}
+
+            {%- if s.button_label != blank -%}
+              {%- comment -%}
+                Until the merchant picks a link this renders as a span, not
+                an anchor, so a fresh install never ships a dead href="#".
+              {%- endcomment -%}
+              {%- capture button_inner -%}
+                <span>{{ s.button_label | escape }}</span>
+                {%- if s.button_style == 'link' -%}
+                  <svg class="ab-arrow" viewBox="0 0 20 12" width="20" height="12" fill="none" aria-hidden="true" focusable="false">
+                    <path d="M0 6h18M13 1l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                {%- endif -%}
+              {%- endcapture -%}
+              {%- if s.button_link != blank -%}
+                <a class="ab-btn ab-btn--{{ s.button_style }}" href="{{ s.button_link }}">{{ button_inner }}</a>
+              {%- else -%}
+                <span class="ab-btn ab-btn--{{ s.button_style }}">{{ button_inner }}</span>
+              {%- endif -%}
+            {%- endif -%}
+          </div>
+        {%- endif -%}
+
+        {%- comment -%} ---------------- 2. Hero ----------------- {%- endcomment -%}
+        {%- if show_hero -%}
+          {%- liquid
+            assign hero_img = s.hero_image
+            assign hero_alt = ''
+            if hero_img != blank and hero_img.alt != blank
+              assign hero_alt = hero_img.alt
+            elsif s.hero_alt != blank
+              assign hero_alt = s.hero_alt
+            endif
+          -%}
+          <div
+            class="ab-tile ab-hero{% if s.hero_ratio == 'fill' %} ab-hero--fill{% endif %}{% if last_half == 'hero' %} ab-tile--wide{% endif %}"
+            style="--i: {{ idx }};"
+          >
+            {%- assign idx = idx | plus: 1 -%}
+            <div class="ab-media ab-media--hero">
+              <div class="ab-media-inner" data-ab-par>
+                {%- if hero_img != blank -%}
+                  <img
+                    src="{{ hero_img | image_url: width: 1200 }}"
+                    srcset="{% for w in widths %}{% assign wn = w | times: 1 %}{% if hero_img.width >= wn %}{{ hero_img | image_url: width: wn }} {{ wn }}w, {% endif %}{% endfor %}{{ hero_img | image_url: width: hero_img.width }} {{ hero_img.width }}w"
+                    sizes="{{ media_sizes }}"
+                    width="{{ hero_img.width }}"
+                    height="{{ hero_img.height }}"
+                    alt="{{ hero_alt | escape }}"
+                    {% if s.section_at_top %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %}
+                    decoding="async"
+                  >
+                {%- else -%}
+                  {{ 'image' | placeholder_svg_tag: 'ab-placeholder' }}
+                {%- endif -%}
+              </div>
+              {%- if s.hero_overlay -%}<span class="ab-overlay" aria-hidden="true"></span>{%- endif -%}
+              {%- if s.hero_caption != blank -%}
+                <p class="ab-caption">{{ s.hero_caption | escape }}</p>
+              {%- endif -%}
+            </div>
+          </div>
+        {%- endif -%}
+
+        {%- comment -%} ---------------- 3. Quote ---------------- {%- endcomment -%}
+        {%- if show_quote -%}
+          <div class="ab-tile ab-quote{% if last_half == 'quote' %} ab-tile--wide{% endif %}" style="--i: {{ idx }};">
+            {%- assign idx = idx | plus: 1 -%}
+            {%- if s.quote_mark -%}
+              <span class="ab-qmark" aria-hidden="true">&ldquo;</span>
+            {%- endif -%}
+            <blockquote class="ab-blockquote">
+              {%- if s.quote_text != blank -%}
+                <p>{{ s.quote_text | escape | newline_to_br }}</p>
+              {%- endif -%}
+              {%- if s.quote_author != blank -%}
+                <cite class="ab-cite">{{ s.quote_author | escape }}</cite>
+              {%- endif -%}
+            </blockquote>
+          </div>
+        {%- endif -%}
+
+        {%- comment -%} ---------------- 4. Arch ----------------- {%- endcomment -%}
+        {%- if show_arch -%}
+          {%- liquid
+            assign arch_img = s.arch_image
+            assign arch_alt = ''
+            if arch_img != blank and arch_img.alt != blank
+              assign arch_alt = arch_img.alt
+            elsif s.arch_alt != blank
+              assign arch_alt = s.arch_alt
+            endif
+          -%}
+          <div
+            class="ab-tile ab-arch{% if s.arch_tint %} ab-arch--tint{% endif %}{% if last_half == 'arch' %} ab-tile--wide{% endif %}"
+            style="--i: {{ idx }};"
+          >
+            {%- assign idx = idx | plus: 1 -%}
+            <div class="ab-media ab-media--arch">
+              <div class="ab-media-inner" data-ab-par>
+                {%- if arch_img != blank -%}
+                  <img
+                    src="{{ arch_img | image_url: width: 1200 }}"
+                    srcset="{% for w in widths %}{% assign wn = w | times: 1 %}{% if arch_img.width >= wn %}{{ arch_img | image_url: width: wn }} {{ wn }}w, {% endif %}{% endfor %}{{ arch_img | image_url: width: arch_img.width }} {{ arch_img.width }}w"
+                    sizes="{{ media_sizes }}"
+                    width="{{ arch_img.width }}"
+                    height="{{ arch_img.height }}"
+                    alt="{{ arch_alt | escape }}"
+                    loading="lazy"
+                    decoding="async"
+                  >
+                {%- else -%}
+                  {{ 'image' | placeholder_svg_tag: 'ab-placeholder' }}
+                {%- endif -%}
+              </div>
+              {%- if s.arch_tint -%}<span class="ab-tint" aria-hidden="true"></span>{%- endif -%}
+            </div>
+          </div>
+        {%- endif -%}
+
+        {%- comment -%} ---------------- 5. Stats ---------------- {%- endcomment -%}
+        {%- if show_stats -%}
+          <div class="ab-tile ab-stats{% if last_half == 'stats' %} ab-tile--wide{% endif %}" style="--i: {{ idx }};">
+            {%- assign idx = idx | plus: 1 -%}
+            <ul class="ab-metrics">
+              {%- for block in metrics limit: 4 -%}
+                {%- assign val = block.settings.value | strip -%}
+                <li class="ab-metric" {{ block.shopify_attributes }}>
+                  <p class="ab-metric-num">
+                    <span
+                      class="ab-metric-val"
+                      data-ab-metric
+                      data-ab-value="{{ val | escape }}"
+                    >{{ val }}</span
+                    >{%- if block.settings.suffix != blank -%}<span class="ab-metric-suffix">{{ block.settings.suffix | escape }}</span>{%- endif -%}
+                  </p>
+                  {%- if block.settings.label != blank -%}
+                    <p class="ab-metric-label">{{ block.settings.label | escape }}</p>
+                  {%- endif -%}
+                </li>
+              {%- endfor -%}
+            </ul>
+          </div>
+        {%- endif -%}
+
+        {%- comment -%} ---------------- 6. Ticker --------------- {%- endcomment -%}
+        {%- if show_ticker -%}
+          <div
+            class="ab-tile ab-ticker ab-ticker--{{ s.ticker_direction }}{% if s.ticker_pause_hover %} ab-ticker--hoverpause{% endif %}"
+            style="--i: {{ idx }};"
+            data-ab-ticker
+          >
+            {%- assign idx = idx | plus: 1 -%}
+            <div class="ab-ticker-vp">
+              <div class="ab-ticker-track">
+                {%- capture ticker_list -%}
+                  {%- for block in ticker_items limit: 16 -%}
+                    <li class="ab-ticker-item">
+                      <span>{{ block.settings.text | escape }}</span>
+                      {%- if sep != blank -%}<span class="ab-ticker-sep" aria-hidden="true">{{ sep }}</span>{%- endif -%}
+                    </li>
+                  {%- endfor -%}
+                {%- endcapture -%}
+                <ul class="ab-ticker-list">
+                  {%- for block in ticker_items limit: 16 -%}
+                    <li class="ab-ticker-item" {{ block.shopify_attributes }}>
+                      <span>{{ block.settings.text | escape }}</span>
+                      {%- if sep != blank -%}<span class="ab-ticker-sep" aria-hidden="true">{{ sep }}</span>{%- endif -%}
+                    </li>
+                  {%- endfor -%}
+                </ul>
+                <ul class="ab-ticker-list" aria-hidden="true">{{ ticker_list }}</ul>
+              </div>
+            </div>
+          </div>
+        {%- endif -%}
+
+      </div>
+    </div>
+  </section>
+
+  <script src="{{ 'about-bento.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "About bento",
+  "tag": "section",
+  "class": "ab-section",
+  "disabled_on": { "groups": ["header", "footer"] },
+  "settings": [
+    { "type": "header", "content": "Layout" },
+    {
+      "type": "checkbox",
+      "id": "section_at_top",
+      "label": "This section is at the top of the page",
+      "default": false,
+      "info": "Turn on only if this is the first thing shoppers see. It loads the tall photo immediately instead of waiting, which makes the top of the page appear faster."
+    },
+    {
+      "type": "range",
+      "id": "content_width",
+      "label": "Maximum width of the section",
+      "min": 1100,
+      "max": 1600,
+      "step": 20,
+      "unit": "px",
+      "default": 1440,
+      "info": "How wide the tiles are allowed to grow on large screens."
+    },
+    {
+      "type": "range",
+      "id": "tile_gap",
+      "label": "Space between tiles",
+      "min": 4,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 12,
+      "info": "Applies on tablet and desktop. Phones always use a compact 10px gap."
+    },
+    {
+      "type": "range",
+      "id": "corner_radius",
+      "label": "Corner roundness",
+      "min": 0,
+      "max": 28,
+      "step": 1,
+      "unit": "px",
+      "default": 14,
+      "info": "0 gives sharp square corners."
+    },
+    {
+      "type": "range",
+      "id": "space_above_desktop",
+      "label": "Space above section on computers",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    },
+    {
+      "type": "range",
+      "id": "space_below_desktop",
+      "label": "Space below section on computers",
+      "min": 0,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    },
+    {
+      "type": "range",
+      "id": "space_above_mobile",
+      "label": "Space above section on phones",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "space_below_mobile",
+      "label": "Space below section on phones",
+      "min": 0,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "text",
+      "id": "aria_label",
+      "label": "Screen reader name for this section",
+      "default": "About Cleopatra Closet",
+      "info": "Read aloud by screen readers so visually impaired shoppers know what this block is. Not visible on the page."
+    },
+
+    { "type": "header", "content": "Colours" },
+    { "type": "color", "id": "color_page_bg", "label": "Background behind the tiles", "default": "#f7f1e8" },
+    { "type": "color", "id": "color_light_bg", "label": "Cream tile background", "default": "#fbf6ef", "info": "Used by the story tile." },
+    { "type": "color", "id": "color_dark_bg", "label": "Dark tile background", "default": "#16110d", "info": "Used by the scrolling words strip." },
+    { "type": "color", "id": "color_accent_bg", "label": "Numbers tile background", "default": "#d9a441" },
+    { "type": "color", "id": "color_dark_text", "label": "Text on light tiles", "default": "#1c1712" },
+    { "type": "color", "id": "color_light_text", "label": "Text on dark tiles", "default": "#f5eee4" },
+    {
+      "type": "color",
+      "id": "color_accent_text",
+      "label": "Highlight colour",
+      "default": "#a34521",
+      "info": "Colours the one highlighted word in the heading, the small tag pills, and the outline that appears around the button when using a keyboard."
+    },
+    {
+      "type": "color",
+      "id": "color_tint",
+      "label": "Photo tint colour",
+      "default": "#c8a24a",
+      "info": "Only used if 'Tint this photo' is turned on for the second photo."
+    },
+
+    { "type": "header", "content": "Typography" },
+    { "type": "font_picker", "id": "heading_font", "label": "Heading font", "default": "playfair_display_n4" },
+    { "type": "font_picker", "id": "body_font", "label": "Body text font", "default": "assistant_n4" },
+    {
+      "type": "range",
+      "id": "heading_size_desktop",
+      "label": "Heading size on computers",
+      "min": 32,
+      "max": 76,
+      "step": 2,
+      "unit": "px",
+      "default": 54
+    },
+    {
+      "type": "range",
+      "id": "heading_size_mobile",
+      "label": "Heading size on phones",
+      "min": 24,
+      "max": 48,
+      "step": 1,
+      "unit": "px",
+      "default": 34,
+      "info": "Anything below 30px is treated as 30px, because smaller than that is hard to read on a phone."
+    },
+    { "type": "range", "id": "body_size", "label": "Body text size", "min": 12, "max": 18, "step": 1, "unit": "px", "default": 16 },
+
+    { "type": "header", "content": "Story tile" },
+    { "type": "checkbox", "id": "show_story", "label": "Show this tile", "default": true },
+    { "type": "checkbox", "id": "show_eyebrow_rule", "label": "Show the small line before the label", "default": true },
+    { "type": "text", "id": "eyebrow", "label": "Small label above the heading", "default": "Handmade in Egypt" },
+    {
+      "type": "textarea",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Pieces made\nby hand, worn\nwith meaning",
+      "info": "Press Enter to start a new line. Each line slides up on its own when the section comes into view."
+    },
+    {
+      "type": "text",
+      "id": "accent_word",
+      "label": "Word to highlight in the heading",
+      "default": "hand",
+      "info": "The first time this word appears in the heading it turns italic and takes the highlight colour. Leave blank for no highlight."
+    },
+    {
+      "type": "richtext",
+      "id": "body",
+      "label": "Story text",
+      "default": "<p>Cleopatra Closet began with a single embroidered scarf and a stubborn belief that ancient craft belongs in a modern wardrobe. Every piece is cut, stitched and finished by hand in small Egyptian workshops, then shipped to you from the UAE.</p>"
+    },
+    {
+      "type": "text",
+      "id": "tags",
+      "label": "Small tag pills",
+      "default": "Hand embroidered, Small batch, Ships from UAE",
+      "info": "Separate each pill with a comma. Leave blank to hide them."
+    },
+    { "type": "text", "id": "button_label", "label": "Button text", "default": "Read our story", "info": "Leave blank to hide the button." },
+    { "type": "url", "id": "button_link", "label": "Button link" },
+    {
+      "type": "select",
+      "id": "button_style",
+      "label": "Button look",
+      "options": [
+        { "value": "pill", "label": "Filled pill" },
+        { "value": "link", "label": "Text link with arrow" }
+      ],
+      "default": "pill"
+    },
+
+    { "type": "header", "content": "Hero image" },
+    { "type": "checkbox", "id": "show_hero", "label": "Show this tile", "default": true },
+    { "type": "image_picker", "id": "hero_image", "label": "Tall photo", "info": "Portrait photos work best. A grey placeholder shows until you add one." },
+    {
+      "type": "text",
+      "id": "hero_alt",
+      "label": "Photo description",
+      "info": "Describes the photo for shoppers using a screen reader. Only used if the image itself has no description saved in Shopify. Leave blank if the photo is purely decorative."
+    },
+    {
+      "type": "select",
+      "id": "hero_ratio",
+      "label": "Photo shape",
+      "options": [
+        { "value": "r34", "label": "Tall (3:4)" },
+        { "value": "r45", "label": "Slightly tall (4:5)" },
+        { "value": "r23", "label": "Very tall (2:3)" },
+        { "value": "fill", "label": "Fill the tile" }
+      ],
+      "default": "r34",
+      "info": "'Fill the tile' stretches the photo to match the height of the tiles beside it."
+    },
+    { "type": "text", "id": "hero_caption", "label": "Caption over the photo", "info": "Optional. Sits in the bottom corner of the photo." },
+    { "type": "checkbox", "id": "hero_overlay", "label": "Darken the bottom of the photo", "default": true, "info": "Makes a caption easier to read on a bright photo." },
+    {
+      "type": "range",
+      "id": "hero_overlay_opacity",
+      "label": "How dark the shading is",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 55
+    },
+
+    { "type": "header", "content": "Arch image" },
+    { "type": "checkbox", "id": "show_arch", "label": "Show this tile", "default": true },
+    { "type": "image_picker", "id": "arch_image", "label": "Second photo" },
+    {
+      "type": "text",
+      "id": "arch_alt",
+      "label": "Photo description",
+      "info": "Only used if the image itself has no description saved in Shopify."
+    },
+    {
+      "type": "select",
+      "id": "arch_ratio",
+      "label": "Photo shape",
+      "options": [
+        { "value": "r43", "label": "Wide (4:3)" },
+        { "value": "r11", "label": "Square" },
+        { "value": "r45", "label": "Slightly tall (4:5)" },
+        { "value": "r23", "label": "Very tall (2:3)" }
+      ],
+      "default": "r43",
+      "info": "On phones this photo is always wide (4:3) so it does not push the rest of the page down."
+    },
+    {
+      "type": "checkbox",
+      "id": "arch_tint",
+      "label": "Tint this photo",
+      "default": false,
+      "info": "Washes the photo in the tint colour set under Colours, so a mismatched photo blends with the rest of the section."
+    },
+
+    { "type": "header", "content": "Quote" },
+    { "type": "checkbox", "id": "show_quote", "label": "Show this tile", "default": true },
+    {
+      "type": "textarea",
+      "id": "quote_text",
+      "label": "Quote",
+      "default": "Every stitch carries a story older than any of us."
+    },
+    { "type": "text", "id": "quote_author", "label": "Who said it", "default": "Nour, founder" },
+    { "type": "checkbox", "id": "quote_mark", "label": "Show the large decorative quote mark", "default": true },
+    { "type": "color", "id": "quote_bg", "label": "Quote tile background", "default": "#2a1f16" },
+
+    { "type": "header", "content": "Statistics" },
+    {
+      "type": "checkbox",
+      "id": "show_stats",
+      "label": "Show this tile",
+      "default": true,
+      "info": "Add up to four numbers using the 'Number' blocks at the bottom of this panel. The tile hides itself if there are none."
+    },
+
+    { "type": "header", "content": "Ticker" },
+    {
+      "type": "checkbox",
+      "id": "show_ticker",
+      "label": "Show this tile",
+      "default": true,
+      "info": "The strip of words that slides across. Add the words using the 'Scrolling word' blocks at the bottom of this panel."
+    },
+    {
+      "type": "select",
+      "id": "ticker_separator",
+      "label": "Symbol between the words",
+      "options": [
+        { "value": "diamond", "label": "Diamond ◆" },
+        { "value": "dot", "label": "Dot •" },
+        { "value": "slash", "label": "Slash /" },
+        { "value": "star", "label": "Star ✦" },
+        { "value": "none", "label": "None" }
+      ],
+      "default": "diamond"
+    },
+    {
+      "type": "range",
+      "id": "ticker_speed",
+      "label": "How fast the words move",
+      "min": 10,
+      "max": 120,
+      "step": 5,
+      "unit": "s",
+      "default": 45,
+      "info": "This is how many seconds one full loop takes. A bigger number means slower."
+    },
+    {
+      "type": "select",
+      "id": "ticker_direction",
+      "label": "Direction the words travel",
+      "options": [
+        { "value": "left", "label": "Right to left" },
+        { "value": "right", "label": "Left to right" }
+      ],
+      "default": "left"
+    },
+    { "type": "checkbox", "id": "ticker_pause_hover", "label": "Stop the words when the mouse rests on them", "default": true },
+
+    { "type": "header", "content": "Animation" },
+    {
+      "type": "checkbox",
+      "id": "anim_enable",
+      "label": "Enable animations",
+      "default": true,
+      "info": "Turn this off to freeze everything in this section. All the switches below are ignored while it is off. Motion is also switched off automatically for shoppers who ask their device to reduce motion."
+    },
+    { "type": "checkbox", "id": "anim_reveal", "label": "Tiles fade up as you scroll to them", "default": true },
+    { "type": "checkbox", "id": "anim_heading", "label": "Heading lines slide up one by one", "default": true },
+    { "type": "checkbox", "id": "anim_zoom", "label": "Photos zoom out gently when they appear", "default": true },
+    { "type": "checkbox", "id": "anim_count", "label": "Numbers count up when they appear", "default": true },
+    { "type": "checkbox", "id": "anim_ticker", "label": "Words strip slides", "default": true },
+    { "type": "checkbox", "id": "anim_hover", "label": "Tiles lift slightly on mouse over", "default": true, "info": "Mouse only. Nothing changes on touch screens." },
+    {
+      "type": "range",
+      "id": "reveal_stagger",
+      "label": "Delay between each tile appearing",
+      "min": 0,
+      "max": 200,
+      "step": 10,
+      "unit": "ms",
+      "default": 80,
+      "info": "Tiles appear one after another rather than all at once. 0 makes them all appear together."
+    },
+    {
+      "type": "range",
+      "id": "parallax_desktop",
+      "label": "How much the photos drift as you scroll (computers)",
+      "min": 0,
+      "max": 80,
+      "step": 4,
+      "unit": "px",
+      "default": 40,
+      "info": "The photos glide slightly slower than the page. Set to 0 to switch the effect off completely."
+    },
+    {
+      "type": "range",
+      "id": "parallax_mobile",
+      "label": "How much the photos drift as you scroll (phones)",
+      "min": 0,
+      "max": 80,
+      "step": 4,
+      "unit": "px",
+      "default": 16,
+      "info": "Keep this small. A large drift looks broken on a narrow screen."
+    }
+  ],
+  "blocks": [
+    {
+      "type": "metric",
+      "name": "Number",
+      "limit": 4,
+      "settings": [
+        {
+          "type": "text",
+          "id": "value",
+          "label": "The number",
+          "default": "2,400",
+          "info": "Whole numbers only. Commas are kept, so 2,400 stays 2,400 while it counts up."
+        },
+        { "type": "text", "id": "suffix", "label": "Symbol after the number", "default": "+", "info": "For example + or %. Leave blank for none." },
+        { "type": "text", "id": "label", "label": "What the number means", "default": "Pieces shipped" }
+      ]
+    },
+    {
+      "type": "ticker_item",
+      "name": "Scrolling word",
+      "limit": 16,
+      "settings": [{ "type": "text", "id": "text", "label": "Word or short phrase", "default": "Hand embroidered" }]
+    }
+  ],
+  "presets": [
+    {
+      "name": "About bento",
+      "blocks": [
+        { "type": "metric", "settings": { "value": "2,400", "suffix": "+", "label": "Pieces shipped" } },
+        { "type": "metric", "settings": { "value": "40", "suffix": "", "label": "Artisan partners" } },
+        { "type": "metric", "settings": { "value": "12", "suffix": "", "label": "Years of craft" } },
+        { "type": "ticker_item", "settings": { "text": "Hand embroidered" } },
+        { "type": "ticker_item", "settings": { "text": "Egyptian cotton" } },
+        { "type": "ticker_item", "settings": { "text": "Small batch" } },
+        { "type": "ticker_item", "settings": { "text": "Ships from the UAE" } },
+        { "type": "ticker_item", "settings": { "text": "Made to last" } },
+        { "type": "ticker_item", "settings": { "text": "Ancient craft, modern wardrobe" } }
+      ]
+    }
+  ]
+}
+{% endschema %}
