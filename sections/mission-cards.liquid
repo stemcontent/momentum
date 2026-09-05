@@ -389,6 +389,7 @@
       var stagger = (parseFloat(root.dataset.stagger) || 0) / 100;
 
       var vh = 1;
+      var docH = 0;
       var items = [];
       var ticking = false;
 
@@ -400,6 +401,7 @@
          index outside the frame loop */
       function measure() {
         vh = window.innerHeight || 1;
+        docH = document.documentElement.scrollHeight;
         var y = window.scrollY;
         var wide = window.innerWidth >= 990;
         var mid = window.innerWidth >= 750;
@@ -418,10 +420,14 @@
         var y = window.scrollY;
         var startPx = vh * startPct;
         var endPx = vh * endPct;
+        /* Once the page cannot scroll any further, anything still
+           mid-animation would be stranded there. Complete it instead —
+           content must never be left permanently faded out. */
+        var atEnd = y + vh >= docH - 2;
         for (var i = 0; i < items.length; i++) {
           var it = items[i];
           var inView = it.top - y;
-          var raw = clamp01((startPx - inView) / (startPx - endPx));
+          var raw = atEnd ? 1 : clamp01((startPx - inView) / (startPx - endPx));
           var p = it.delay > 0 ? clamp01((raw - it.delay) / (1 - it.delay)) : raw;
           var st = it.el.style;
           st.setProperty('--mc-r', phase(p, 0, 0.35).toFixed(3));

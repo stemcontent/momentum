@@ -586,6 +586,7 @@
       }
 
       var vh = 1;
+      var docH = 0;
       var items = [];
       var ticking = false;
 
@@ -595,6 +596,7 @@
 
       function measure() {
         vh = window.innerHeight || 1;
+        docH = document.documentElement.scrollHeight;
         var y = window.scrollY;
         items = rows.map(function (el) {
           return { el: el, top: el.getBoundingClientRect().top + y };
@@ -611,9 +613,13 @@
         var y = window.scrollY;
         var startPx = vh * startPct;
         var endPx = vh * endPct;
+        /* Once the page cannot scroll any further, anything still
+           mid-animation would be stranded there. Complete it instead —
+           content must never be left permanently faded out or muted. */
+        var atEnd = y + vh >= docH - 2;
         for (var i = 0; i < items.length; i++) {
           var inView = items[i].top - y;
-          var p = clamp01((startPx - inView) / (startPx - endPx));
+          var p = atEnd ? 1 : clamp01((startPx - inView) / (startPx - endPx));
           var st = items[i].el.style;
           st.setProperty('--p-rule', phase(p, 0, 0.4).toFixed(3));
           st.setProperty('--p-a', phase(p, 0.15, 0.55).toFixed(3));
@@ -624,7 +630,7 @@
         var sEnd = vh * sweepEndPct;
         for (var j = 0; j < sweeps.length; j++) {
           var sw = sweeps[j];
-          var sp = clamp01((sStart - (sw.top - y)) / (sStart - sEnd));
+          var sp = atEnd ? 1 : clamp01((sStart - (sw.top - y)) / (sStart - sEnd));
           sw.el.style.setProperty('--sweep', sp.toFixed(4));
         }
       }
