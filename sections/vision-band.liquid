@@ -54,6 +54,16 @@
 -%}
 
 {% style %}
+  /* ---- Own the box model inside this section so padding is
+         contained by declared heights and widths, whatever the
+         host theme's global default happens to be ---- */
+  #VisionBand-{{ sid }},
+  #VisionBand-{{ sid }} *,
+  #VisionBand-{{ sid }} *::before,
+  #VisionBand-{{ sid }} *::after {
+    box-sizing: border-box;
+  }
+
   /* ---- Per-instance design tokens ---- */
   #VisionBand-{{ sid }} {
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -512,16 +522,36 @@
     }
 
     function initVisionBand(root) {
-      if (!root || root.dataset.init === 'true') return;
-      root.dataset.init = 'true';
+      /* The guard lives on the element object, never as a data-
+         attribute: an attribute is serialized into innerHTML, so a
+         theme or app that re-injects cached markup would ship an
+         already-"initialized" section that never wires itself up and
+         stays stuck in its pre-animation state. */
+      if (!root || root.__vbInit) return;
+      root.__vbInit = true;
 
       var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
       var rebuildMarquee = buildMarquee(root.querySelector('[data-marquee]'));
 
       var animOn = root.dataset.animate === 'true';
+      var rows = Array.prototype.slice.call(root.querySelectorAll('[data-row]'));
+      var bodies = Array.prototype.slice.call(root.querySelectorAll('[data-sweep-text]'));
+      var PROPS = ['--p-rule', '--p-a', '--p-b', '--p-c'];
+
+      /* Drop progress values left behind by a previous life of this
+         markup. This runs before any early return so that switching
+         animations off can never leave content stuck at opacity 0 or
+         permanently muted. */
+      function clearProgress() {
+        rows.forEach(function (el) {
+          PROPS.forEach(function (p) { el.style.removeProperty(p); });
+        });
+        bodies.forEach(function (el) { el.style.removeProperty('--sweep'); });
+      }
+      clearProgress();
+
       if (!animOn || prm.matches) return;
 
-      var rows = Array.prototype.slice.call(root.querySelectorAll('[data-row]'));
       var sweepOn = root.dataset.sweep === 'true';
       var startPct = (parseFloat(root.dataset.start) || 90) / 100;
       var endPct = (parseFloat(root.dataset.end) || 60) / 100;
@@ -530,19 +560,24 @@
 
       /* Split each row body once and cache. A visually-hidden clone of
          the untouched richtext keeps the copy accessible; the split
-         copy is aria-hidden. */
+         copy is aria-hidden. Markup that arrives already split (cached
+         and re-injected) is re-adopted rather than skipped, so its
+         sweep keeps being driven instead of freezing at its last value. */
       var sweeps = [];
       if (sweepOn) {
-        rows.forEach(function (row) {
-          var body = row.querySelector('[data-sweep-text]');
-          if (!body || body.dataset.split === 'true') return;
-          body.dataset.split = 'true';
-          var accessible = body.cloneNode(true);
-          accessible.className = 'vb-vh';
-          accessible.removeAttribute('data-sweep-text');
-          body.parentNode.insertBefore(accessible, body);
-          body.setAttribute('aria-hidden', 'true');
-          var total = splitWords(body, 'vb-w');
+        bodies.forEach(function (body) {
+          var total;
+          if (body.dataset.split === 'true') {
+            total = body.querySelectorAll('.vb-w').length;
+          } else {
+            body.dataset.split = 'true';
+            var accessible = body.cloneNode(true);
+            accessible.className = 'vb-vh';
+            accessible.removeAttribute('data-sweep-text');
+            body.parentNode.insertBefore(accessible, body);
+            body.setAttribute('aria-hidden', 'true');
+            total = splitWords(body, 'vb-w');
+          }
           if (total > 0) {
             body.style.setProperty('--wt', total);
             sweeps.push({ el: body, top: 0, h: 1 });
@@ -613,12 +648,7 @@
 
       function toFinal() {
         window.removeEventListener('scroll', onScroll);
-        items.forEach(function (it) {
-          ['--p-rule', '--p-a', '--p-b', '--p-c'].forEach(function (prop) {
-            it.el.style.removeProperty(prop);
-          });
-        });
-        sweeps.forEach(function (sw) { sw.el.style.removeProperty('--sweep'); });
+        clearProgress();
       }
 
       /* First paint: set progress synchronously so nothing flashes */
@@ -626,7 +656,14 @@
       frame();
       window.addEventListener('scroll', onScroll, { passive: true });
       window.addEventListener('resize', onResize);
-      window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+      /* Re-measure once everything has loaded. When the section is
+         inserted after page load (theme editor), "load" will never
+         fire again, so fall back to a deferred re-measure. */
+      if (document.readyState === 'complete') {
+        setTimeout(function () { measure(); onScroll(); }, 0);
+      } else {
+        window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+      }
 
       function onMotionChange() {
         if (prm.matches) toFinal();

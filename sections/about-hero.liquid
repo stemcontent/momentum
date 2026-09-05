@@ -14,11 +14,14 @@
        slower than the page; illustration blocks drift at their own
        per-block parallax rates.
 
-  Progressive enhancement: the "hidden" pre-animation state is only
-  applied by JS (classes ah-pre / ah-play added before first paint by
-  the inline script). If JS never runs, everything renders in its
-  final state. All CSS is scoped by section id; safe for multiple
-  instances; re-initializes on shopify:section:load.
+  Progressive enhancement: the hidden start state exists only inside
+  CSS keyframes gated behind the .ah-anim class, which JS adds. If JS
+  never runs, everything renders in its final state; and because the
+  entrance is a keyframe animation with fill-mode "both" rather than a
+  class-toggled transition, it still completes on wall-clock time in a
+  background tab or hidden preview iframe where requestAnimationFrame
+  is never serviced. All CSS is scoped by section id; safe for
+  multiple instances; re-initializes on shopify:section:load.
   ------------------------------------------------------------------
 {% endcomment %}
 
@@ -64,6 +67,16 @@
 -%}
 
 {% style %}
+  /* ---- Own the box model inside this section so padding is
+         contained by declared heights and widths, whatever the
+         host theme's global default happens to be ---- */
+  #AboutHero-{{ sid }},
+  #AboutHero-{{ sid }} *,
+  #AboutHero-{{ sid }} *::before,
+  #AboutHero-{{ sid }} *::after {
+    box-sizing: border-box;
+  }
+
   /* ---- Per-instance design tokens (every setting becomes a custom
          property on the section root) ---- */
   #AboutHero-{{ sid }} {
@@ -224,9 +237,11 @@
     left: 50%;
     z-index: 2;
     /* Base transform keeps the cue centered when the bounce animation
-       is disabled (reduced motion) */
+       is disabled (reduced motion or animations off) */
     transform: translateX(-50%);
     color: var(--ah-muted);
+  }
+  #AboutHero-{{ sid }}[data-animate='true'] .ah-cue {
     animation: ah-cue-bounce 2.8s var(--ease) infinite;
   }
   #AboutHero-{{ sid }} .ah-cue__text {
@@ -283,42 +298,49 @@
     50% { transform: translate3d(0, calc(var(--ah-illo-par, 0px) - 12px), 0); }
   }
 
-  /* ---- Load animation states (applied by JS only, pre-paint, so a
-         no-JS visit renders everything in its final state) ---- */
+  /* ---- Load animation (one-shot).
+     Implemented as CSS animations rather than a class-toggled
+     transition on purpose: a keyframe animation with fill-mode "both"
+     always reaches its final state on wall-clock time, even when the
+     page is in a background tab or a hidden preview iframe where
+     requestAnimationFrame is never serviced. The .ah-anim class is
+     added by JS, so a visit without JS renders the final state and
+     nothing is ever left stuck at opacity 0. ---- */
   #AboutHero-{{ sid }} .ah-w { display: inline-block; }
-  #AboutHero-{{ sid }}.ah-pre .ah-w {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  #AboutHero-{{ sid }}.ah-pre .ah-media { clip-path: inset(100% 0 0 0); }
-  #AboutHero-{{ sid }}.ah-pre .ah-label,
-  #AboutHero-{{ sid }}.ah-pre .ah-btnrow,
-  #AboutHero-{{ sid }}.ah-pre .ah-cue { opacity: 0; }
 
-  #AboutHero-{{ sid }}.ah-play .ah-w {
-    opacity: 1;
-    transform: none;
-    transition: opacity 600ms var(--ease), transform 600ms var(--ease);
-    transition-delay: calc(var(--wi, 0) * var(--ah-stagger, 30ms));
+  #AboutHero-{{ sid }}.ah-anim .ah-w {
+    animation: ah-word-in 600ms var(--ease) both;
+    animation-delay: calc(var(--wi, 0) * var(--ah-stagger, 30ms));
   }
-  #AboutHero-{{ sid }}.ah-play .ah-media {
-    clip-path: inset(0 0 0 0);
-    transition: clip-path 700ms var(--ease);
-    transition-delay: var(--ah-media-delay, 500ms);
+  #AboutHero-{{ sid }}.ah-anim .ah-media {
+    animation: ah-media-in 700ms var(--ease) both;
+    animation-delay: var(--ah-media-delay, 500ms);
   }
-  #AboutHero-{{ sid }}.ah-play .ah-label {
-    opacity: 1;
-    transition: opacity 600ms var(--ease);
+  #AboutHero-{{ sid }}.ah-anim .ah-label {
+    animation: ah-fade-in 600ms var(--ease) both;
   }
-  #AboutHero-{{ sid }}.ah-play .ah-btnrow,
-  #AboutHero-{{ sid }}.ah-play .ah-cue {
-    opacity: 1;
-    transition: opacity 700ms var(--ease);
-    transition-delay: calc(var(--ah-media-delay, 500ms) + 300ms);
+  #AboutHero-{{ sid }}.ah-anim .ah-btnrow {
+    animation: ah-fade-in 700ms var(--ease) both;
+    animation-delay: calc(var(--ah-media-delay, 500ms) + 300ms);
   }
-  /* The cue's bounce uses the same opacity, so re-declare with the
-     animation shorthand intact */
-  #AboutHero-{{ sid }}.ah-play .ah-cue { animation-delay: 1.4s; }
+  /* The cue owns an infinite bounce, so its entrance is a delay on the
+     bounce itself rather than a second animation on the same element */
+  #AboutHero-{{ sid }}.ah-anim[data-animate='true'] .ah-cue {
+    animation-delay: calc(var(--ah-media-delay, 500ms) + 300ms);
+  }
+
+  @keyframes ah-word-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes ah-media-in {
+    from { clip-path: inset(100% 0 0 0); }
+    to { clip-path: inset(0 0 0 0); }
+  }
+  @keyframes ah-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 
   /* ---- Responsive ---- */
   @media (max-width: 749px) {
@@ -343,17 +365,22 @@
          bounce, no marquee — final state renders immediately ---- */
   @media (prefers-reduced-motion: reduce) {
     #AboutHero-{{ sid }} .ah-inner { transform: none; }
-    #AboutHero-{{ sid }} .ah-illo,
-    #AboutHero-{{ sid }} .ah-cue { animation: none !important; }
     #AboutHero-{{ sid }} .ah-illo { transform: none; }
     #AboutHero-{{ sid }} .ah-btn__track { display: none; }
     #AboutHero-{{ sid }} .ah-btn[data-ready]:hover .ah-btn__static,
     #AboutHero-{{ sid }} .ah-btn[data-ready]:focus-visible .ah-btn__static { opacity: 1; }
-    #AboutHero-{{ sid }}.ah-pre .ah-w,
-    #AboutHero-{{ sid }}.ah-pre .ah-label,
-    #AboutHero-{{ sid }}.ah-pre .ah-btnrow,
-    #AboutHero-{{ sid }}.ah-pre .ah-cue { opacity: 1; transform: none; }
-    #AboutHero-{{ sid }}.ah-pre .ah-media { clip-path: none; }
+    /* Cancel every animation, then restore the final state explicitly:
+       with the animation gone, fill-mode can no longer hold it. */
+    #AboutHero-{{ sid }} *,
+    #AboutHero-{{ sid }}.ah-anim .ah-w,
+    #AboutHero-{{ sid }}.ah-anim .ah-media,
+    #AboutHero-{{ sid }}.ah-anim .ah-label,
+    #AboutHero-{{ sid }}.ah-anim .ah-btnrow,
+    #AboutHero-{{ sid }}.ah-anim .ah-cue { animation: none !important; }
+    #AboutHero-{{ sid }} .ah-w,
+    #AboutHero-{{ sid }} .ah-label,
+    #AboutHero-{{ sid }} .ah-btnrow { opacity: 1; transform: none; }
+    #AboutHero-{{ sid }} .ah-media { clip-path: none; }
   }
 {% endstyle %}
 
@@ -497,8 +524,13 @@
     }
 
     function initAboutHero(root) {
-      if (!root || root.dataset.init === 'true') return;
-      root.dataset.init = 'true';
+      /* The guard lives on the element object, never as a data-
+         attribute: an attribute is serialized into innerHTML, so a
+         theme or app that re-injects cached markup would ship an
+         already-"initialized" section that never wires itself up and
+         stays stuck in its pre-animation state. */
+      if (!root || root.__ahInit) return;
+      root.__ahInit = true;
 
       var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
       var animOn = root.dataset.animate === 'true';
@@ -506,9 +538,14 @@
       var segs = root.querySelectorAll('[data-split]');
       var illos = Array.prototype.slice.call(root.querySelectorAll('[data-illo]'));
 
-      /* ---- Load animation (one-shot). Runs pre-paint: this script is
-         parser-blocking directly after the markup, so the hidden state
-         never flashes visible first. ---- */
+      /* Clear any progress values left behind by a previous life of
+         this markup (see the guard note above) */
+      root.classList.remove('ah-anim');
+      if (inner) inner.style.removeProperty('--ah-drift');
+
+      /* ---- Load animation (one-shot), driven entirely by CSS
+         keyframes with fill-mode "both" so the final state is reached
+         on wall-clock time even if no frame is ever painted. ---- */
       if (animOn && root.dataset.loadAnim === 'true' && !prm.matches && segs.length) {
         var count = 0;
         for (var i = 0; i < segs.length; i++) count = splitWords(segs[i], count);
@@ -517,12 +554,7 @@
           var stagger = Math.min(32, Math.max(12, Math.round(820 / count)));
           root.style.setProperty('--ah-stagger', stagger + 'ms');
           root.style.setProperty('--ah-media-delay', Math.min(900, count * stagger + 220) + 'ms');
-          root.classList.add('ah-pre');
-          requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-              root.classList.add('ah-play');
-            });
-          });
+          root.classList.add('ah-anim');
         }
       }
 
@@ -590,12 +622,19 @@
         window.addEventListener('scroll', onScroll, { passive: true });
       }
       window.addEventListener('resize', onResize);
-      window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+      /* Re-measure once everything has loaded. When the section is
+         inserted after page load (theme editor), "load" will never
+         fire again, so fall back to a deferred re-measure. */
+      if (document.readyState === 'complete') {
+        setTimeout(function () { measure(); onScroll(); }, 0);
+      } else {
+        window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+      }
 
       function onMotionChange() {
         if (prm.matches) {
           stopParallax();
-          root.classList.remove('ah-pre', 'ah-play');
+          root.classList.remove('ah-anim');
         }
       }
       if (prm.addEventListener) prm.addEventListener('change', onMotionChange);

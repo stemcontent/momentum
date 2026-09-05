@@ -32,6 +32,16 @@
 -%}
 
 {% style %}
+  /* ---- Own the box model inside this section so padding is
+         contained by declared heights and widths, whatever the
+         host theme's global default happens to be ---- */
+  #WordRibbon-{{ sid }},
+  #WordRibbon-{{ sid }} *,
+  #WordRibbon-{{ sid }} *::before,
+  #WordRibbon-{{ sid }} *::after {
+    box-sizing: border-box;
+  }
+
   /* ---- Per-instance design tokens ---- */
   #WordRibbon-{{ sid }} {
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -154,13 +164,29 @@
     'use strict';
 
     function initWordRibbon(root) {
-      if (!root || root.dataset.init === 'true') return;
-      root.dataset.init = 'true';
+      /* The guard lives on the element object, never as a data-
+         attribute: an attribute is serialized into innerHTML, so a
+         theme or app that re-injects cached markup would ship an
+         already-"initialized" section that never wires itself up and
+         stays stuck in its pre-animation state. */
+      if (!root || root.__wrInit) return;
+      root.__wrInit = true;
 
       var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
       var track = root.querySelector('[data-track]');
       var seq = root.querySelector('[data-seq]');
-      if (!track || !seq || seq.children.length === 0) return;
+      if (!track || !seq) return;
+
+      /* Reset state left behind by a previous life of this markup:
+         drop stale clones, the running transform and the ready flag,
+         so re-injected HTML always restarts from the static sequence
+         (see the guard note above) */
+      var stale = track.querySelectorAll('[data-clone]');
+      for (var si = 0; si < stale.length; si++) track.removeChild(stale[si]);
+      track.style.transform = '';
+      root.removeAttribute('data-ready');
+
+      if (seq.children.length === 0) return;
 
       var animOn = root.dataset.animate === 'true';
       var loopSeconds = parseFloat(root.dataset.speed) || 20;

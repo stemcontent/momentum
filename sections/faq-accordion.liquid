@@ -30,6 +30,16 @@
 -%}
 
 {% style %}
+  /* ---- Own the box model inside this section so padding is
+         contained by declared heights and widths, whatever the
+         host theme's global default happens to be ---- */
+  #FaqAccordion-{{ sid }},
+  #FaqAccordion-{{ sid }} *,
+  #FaqAccordion-{{ sid }} *::before,
+  #FaqAccordion-{{ sid }} *::after {
+    box-sizing: border-box;
+  }
+
   /* ---- Per-instance design tokens ---- */
   #FaqAccordion-{{ sid }} {
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -498,8 +508,13 @@
     }
 
     function initFaqAccordion(root) {
-      if (!root || root.dataset.init === 'true') return;
-      root.dataset.init = 'true';
+      /* The guard lives on the element object, never as a data-
+         attribute: an attribute is serialized into innerHTML, so a
+         theme or app that re-injects cached markup would ship an
+         already-"initialized" section that never wires itself up and
+         stays stuck in its pre-animation state. */
+      if (!root || root.__faInit) return;
+      root.__faInit = true;
 
       var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
       var items = Array.prototype.slice.call(root.querySelectorAll('[data-item]'));
@@ -530,32 +545,60 @@
       });
 
       /* ---- Scroll entrance: one-shot fade-up with a small stagger
-         within each IntersectionObserver batch. The fa-anim class is
-         added pre-paint by this inline script; skipped when
-         animations are off or reduced motion is set. ---- */
+         within each IntersectionObserver batch. ---- */
+
+      /* Clear state left behind by a previous life of this markup, so
+         re-injected HTML never arrives pre-hidden (see guard above) */
+      root.classList.remove('fa-anim');
+      items.forEach(function (item) {
+        item.classList.remove('fa-item--in');
+        item.style.removeProperty('--fa-delay');
+      });
+
       var io = null;
+      var watchdog = null;
+      function revealAll() {
+        items.forEach(function (item) { item.classList.add('fa-item--in'); });
+      }
+
       if (
         root.dataset.animate === 'true' &&
         !prm.matches &&
-        'IntersectionObserver' in window &&
+        typeof window.IntersectionObserver === 'function' &&
         items.length
       ) {
         var stagger = parseInt(root.dataset.stagger, 10) || 0;
-        root.classList.add('fa-anim');
-        io = new IntersectionObserver(
-          function (entries) {
-            var batch = 0;
-            entries.forEach(function (entry) {
-              if (!entry.isIntersecting) return;
-              entry.target.style.setProperty('--fa-delay', batch * stagger + 'ms');
-              entry.target.classList.add('fa-item--in');
-              io.unobserve(entry.target);
-              batch++;
-            });
-          },
-          { rootMargin: '0px 0px -8% 0px' }
-        );
-        items.forEach(function (item) { io.observe(item); });
+        var delivered = false;
+        try {
+          io = new IntersectionObserver(
+            function (entries) {
+              delivered = true;
+              var batch = 0;
+              entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                entry.target.style.setProperty('--fa-delay', batch * stagger + 'ms');
+                entry.target.classList.add('fa-item--in');
+                io.unobserve(entry.target);
+                batch++;
+              });
+            },
+            { rootMargin: '0px 0px -8% 0px' }
+          );
+          items.forEach(function (item) { io.observe(item); });
+          /* Only hide the rows once an observer is actually watching
+             them, so a failure above leaves the list fully readable */
+          root.classList.add('fa-anim');
+          /* Watchdog: a working observer reports on every target almost
+             immediately, intersecting or not. If nothing arrives it is
+             stubbed or broken, so reveal everything rather than leaving
+             the questions invisible. */
+          watchdog = setTimeout(function () {
+            if (!delivered) revealAll();
+          }, 700);
+        } catch (err) {
+          root.classList.remove('fa-anim');
+          revealAll();
+        }
       }
 
       var rebuildMarquee = buildMarquee(root.querySelector('[data-marquee]'));
@@ -575,6 +618,7 @@
 
       root.__teardown = function () {
         if (io) io.disconnect();
+        clearTimeout(watchdog);
         window.removeEventListener('resize', onResize);
         if (prm.removeEventListener) prm.removeEventListener('change', onMotionChange);
       };

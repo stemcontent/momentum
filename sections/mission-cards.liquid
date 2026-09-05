@@ -24,15 +24,25 @@
   assign s = section.settings
   assign sid = section.id
 
-  assign cols = s.columns
-  if cols > 2
+  assign col_count = s.columns
+  if col_count > 2
     assign t_cols = 2
   else
-    assign t_cols = cols
+    assign t_cols = col_count
   endif
 -%}
 
 {% style %}
+  /* ---- Own the box model inside this section so padding is
+         contained by declared heights and widths, whatever the
+         host theme's global default happens to be ---- */
+  #MissionCards-{{ sid }},
+  #MissionCards-{{ sid }} *,
+  #MissionCards-{{ sid }} *::before,
+  #MissionCards-{{ sid }} *::after {
+    box-sizing: border-box;
+  }
+
   /* ---- Per-instance design tokens ---- */
   #MissionCards-{{ sid }} {
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -43,7 +53,7 @@
     --mc-body: {{ s.color_body }};
     --mc-num: {{ s.color_number }};
     --mc-hairline: {{ s.color_hairline }};
-    --mc-cols: {{ cols }};
+    --mc-cols: {{ col_count }};
     --mc-cols-t: {{ t_cols }};
     --mc-offset: {{ s.offset }}px;
     --mc-heading-size: clamp({{ s.heading_size_m }}px, 4vw, {{ s.heading_size }}px);
@@ -296,7 +306,7 @@
       {%- for block in section.blocks -%}
         {%- if block.type == 'card' -%}
           {%- liquid
-            assign col_d = card_i | modulo: cols
+            assign col_d = card_i | modulo: col_count
             assign col_t = card_i | modulo: t_cols
             assign card_i = card_i | plus: 1
             assign num = card_i | prepend: '00' | slice: -2, 2
@@ -349,14 +359,30 @@
     'use strict';
 
     function initMissionCards(root) {
-      if (!root || root.dataset.init === 'true') return;
-      root.dataset.init = 'true';
+      /* The guard lives on the element object, never as a data-
+         attribute: an attribute is serialized into innerHTML, so a
+         theme or app that re-injects cached markup would ship an
+         already-"initialized" section that never wires itself up and
+         stays stuck in its pre-animation state. */
+      if (!root || root.__mcInit) return;
+      root.__mcInit = true;
 
       var prm = window.matchMedia('(prefers-reduced-motion: reduce)');
-      if (root.dataset.animate !== 'true' || prm.matches) return;
-
       var cards = Array.prototype.slice.call(root.querySelectorAll('[data-card]'));
+      var PROPS = ['--mc-r', '--mc-a', '--mc-b', '--mc-c'];
+
+      /* Drop progress values left behind by a previous life of this
+         markup. This runs before any early return so that switching
+         animations off can never leave content stuck at opacity 0. */
+      function clearProgress() {
+        cards.forEach(function (el) {
+          PROPS.forEach(function (p) { el.style.removeProperty(p); });
+        });
+      }
+      clearProgress();
+
       if (!cards.length) return;
+      if (root.dataset.animate !== 'true' || prm.matches) return;
 
       var startPct = (parseFloat(root.dataset.start) || 85) / 100;
       var endPct = (parseFloat(root.dataset.end) || 45) / 100;
@@ -420,12 +446,7 @@
 
       function toFinal() {
         window.removeEventListener('scroll', onScroll);
-        items.forEach(function (it) {
-          it.el.style.removeProperty('--mc-r');
-          it.el.style.removeProperty('--mc-a');
-          it.el.style.removeProperty('--mc-b');
-          it.el.style.removeProperty('--mc-c');
-        });
+        clearProgress();
       }
 
       /* First paint: set progress synchronously so nothing flashes */
@@ -433,7 +454,14 @@
       frame();
       window.addEventListener('scroll', onScroll, { passive: true });
       window.addEventListener('resize', onResize);
-      window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+      /* Re-measure once everything has loaded. When the section is
+         inserted after page load (theme editor), "load" will never
+         fire again, so fall back to a deferred re-measure. */
+      if (document.readyState === 'complete') {
+        setTimeout(function () { measure(); onScroll(); }, 0);
+      } else {
+        window.addEventListener('load', function () { measure(); onScroll(); }, { once: true });
+      }
 
       function onMotionChange() {
         if (prm.matches) toFinal();
